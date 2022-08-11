@@ -1,0 +1,4 @@
+#ifndef __DISTORE__SEARCH_LAYER__SEARCH_LAYER__
+#define __DISTORE__SEARCH_LAYER__SEARCH_LAYER__
+
+#endif

@@ -1,0 +1,4 @@
+#ifndef __DISTORE__RDMA_UTIL__RDMA_UTIL__
+#define __DISTORE__RDMA_UTIL__RDMA_UTIL__
+
+#endif
