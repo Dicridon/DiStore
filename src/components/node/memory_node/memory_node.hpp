@@ -1,0 +1,4 @@
+#ifndef __DISTORE__NODE__MEMORY_NODE__MEMORY_NODE__
+#define __DISTORE__NODE__MEMORY_NODE__MEMORY_NODE__
+
+#endif
