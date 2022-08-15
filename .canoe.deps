@@ -19,7 +19,7 @@
 ./src/components/tests/tests.hpp: 
 ./src/components/data_layer/data_layer.hpp: 
 ./src/components/data_layer/data_layer.cpp: ./src/components/data_layer/data_layer.hpp
-./src/components/rdma_util/rdma_util.hpp: 
+./src/components/rdma_util/rdma_util.hpp: ./src/components/memory/memory.hpp
 ./src/components/rdma_util/rdma_util.cpp: ./src/components/rdma_util/rdma_util.hpp
 ./src/components/search_layer/search_layer.hpp: 
 ./src/components/search_layer/search_layer.cpp: ./src/components/search_layer/search_layer.hpp
