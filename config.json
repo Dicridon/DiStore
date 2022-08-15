@@ -5,10 +5,11 @@
     "flags": {
         "compile": {
             "opt": "-O2",
-            "debug": "-g"
+            "debug": "-g",
+            "std": "-std=c++17"
         },
         "link": {
-
+            "ibverbs": "-libverbs"
         }
     }
 }

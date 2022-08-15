@@ -8,6 +8,8 @@ namespace DiStore {
             static constexpr uint64_t uREMOTE_POINTER_MASK = ~0xffff000000000000UL;
             static constexpr uint64_t uREMOTE_POINTER_BITS_MASK = 0xc000000000000000UL;
             static constexpr uint64_t uREMOTE_POINTER_BITS = 0x2UL;
+            static constexpr size_t MEMORY_PAGE_SIZE = 4096;
+            static constexpr uint64_t PAGE_MASK = 0xfffffffffffff000;
         }
 
         namespace Enums {
@@ -73,6 +75,14 @@ namespace DiStore {
                 return reinterpret_cast<T>(copy);
             }
 
+            auto operator==(const RemotePointer &rhs) const -> bool {
+                return this->ptr == rhs.ptr;
+            }
+
+            auto operator!=(const RemotePointer &rhs) const -> bool {
+                return !(*this == rhs);
+            }
+
             inline auto get_node() const noexcept -> int {
                 auto value = reinterpret_cast<uint64_t>(ptr);
                 return (value >> 56) & (0x3fUL);
@@ -89,9 +99,31 @@ namespace DiStore {
             inline auto is_nullptr() const noexcept -> bool {
                 return ptr == nullptr;
             }
+
+            inline auto offset(size_t off) -> RemotePointer & {
+                // not quite safe here, but works
+                ptr += off;
+                return *this;
+            }
+
+            inline auto page() const noexcept -> RemotePointer {
+                auto back = *this;
+                auto plain = reinterpret_cast<uint64_t>(ptr);
+                back.ptr = reinterpret_cast<byte_ptr_t>(plain & Constants::PAGE_MASK);
+                return back;
+            }
+
+            struct RemotePointerHasher {
+                auto operator()(const RemotePointer &re) const -> size_t {
+                    return std::hash<byte_ptr_t>{}(re.raw_ptr());
+                }
+            };
+            
         private:
             byte_ptr_t ptr;
         };
+
+        
 
         class PolymorphicPointer {
         public:

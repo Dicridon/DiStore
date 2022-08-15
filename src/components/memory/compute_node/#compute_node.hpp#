@@ -97,7 +97,7 @@ namespace DiStore {
         };
 
         struct SegmentTracker {
-            Segment *current;            
+            Segment *current;
             std::unordered_map<RemotePointer, std::unique_ptr<Segment>, RemotePointer::RemotePointerHasher> segments;
 
 
