@@ -1,17 +1,29 @@
 #ifndef __DISTORE__MEMORY__COMPUTE_NODE__COMPUTE_NODE__
 #define __DISTORE__MEMORY__COMPUTE_NODE__COMPUTE_NODE__
 #include "node/node.hpp"
-#include "../memory.hpp"
-#include "../remote_memory/remote_memory.hpp"
-#include "../memory_node/memory_node.hpp"
+#include "memory/memory.hpp"
+#include "memory/remote_memory/remote_memory.hpp"
+#include "memory/memory_node/memory_node.hpp"
 #include "rdma_util/rdma_util.hpp"
 #include "misc/misc.hpp"
 
 #include <unordered_map>
 #include <thread>
+#include <mutex>
+#include <fstream>
 
 namespace DiStore {
     namespace Memory {
+
+        namespace Enums {
+            enum class MemoryAllocationStatus {
+                Ok,
+                NoMemory,
+                EmptyPage,
+                EmptyPageGroup,
+            };
+        }
+
         using namespace RDMAUtil;
 
         enum AllocationClass {
@@ -50,6 +62,16 @@ namespace DiStore {
             byte_t synced : 3;
             byte_t offset;
 
+            auto initialize(AllocationClass ac) -> void {
+                allocation_class = ac;
+
+                auto size = allocation_class_size_map[ac];
+                empty_slots = Constants::MEMORY_PAGE_SIZE / size;
+
+                synced = 0;
+                offset = 0;
+            }
+
             auto clear() -> void {
                 empty_slots = 0;
                 allocation_class = 0;
@@ -72,44 +94,56 @@ namespace DiStore {
         } __attribute__((packed));
 
         struct PageGroup {
-            PageMirror pages[4];
+            PageMirror *pages[Constants::PAGEGROUP_NO];
 
+            // caller will use available() to ensure page group offers sufficient memory
             auto allocate(AllocationClass ac) -> RemotePointer;
-            auto available(AllocationClass ac) -> bool;
+            auto available(AllocationClass ac) -> Enums::MemoryAllocationStatus;
             auto free(RemotePointer) -> bool;
+
+            auto dump() const noexcept -> void;
         };
 
         struct Segment {
             RemotePointer seg;
+
+            // the global base address, not the one of this segment
+            RemotePointer base_addr;
             size_t offset;
             size_t available_pages;
             /*
              * this map trakcs all pages in current segment
-             * if a page is emptied, we pop it out from this map
-             * memory leaks can occur here, but who cares?
+             * if a page is empty, we pop it out from this map
              */
             std::unordered_map<RemotePointer, PageMirror *, RemotePointer::RemotePointerHasher> mirrors;
 
-            Segment(RemotePointer seg) : seg(seg), offset(1) {
+            Segment(RemotePointer seg, RemotePointer base) : seg(seg), base_addr(base), offset(1) {
                 // the first page is not used
                 available_pages = Constants::SEGMENT_SIZE / Constants::MEMORY_PAGE_SIZE - 1;
             }
+
+            auto dump() const noexcept -> void;
         };
 
         struct SegmentTracker {
             Segment *current;
+
             std::unordered_map<RemotePointer, std::unique_ptr<Segment>, RemotePointer::RemotePointerHasher> segments;
 
-
-            auto assign_new_seg(RemotePointer seg) -> void {
-                auto segment = std::make_unique<Segment>(seg);
+            auto assign_new_seg(RemotePointer seg, RemotePointer base) -> void {
+                auto segment = std::make_unique<Segment>(seg, base);
                 current = segment.get();
                 segments.insert({seg, std::move(segment)});
             }
 
-            auto available_for() -> bool {
-                return current->available_pages != 0;
+            auto available(size_t request = 1) -> bool {
+                return current->available_pages >= request;
             }
+
+            auto offer_page() -> PageMirror *;
+            auto offer_page_group() -> PageGroup *;
+
+            auto dump() const noexcept -> void;
 
             SegmentTracker() : current(nullptr) {};
             SegmentTracker(const SegmentTracker &) = delete;
@@ -118,10 +152,13 @@ namespace DiStore {
             auto operator=(SegmentTracker &&) = delete;
         };
 
+
+        // class ComputeNodeAllocator and RemoteMemoryManager are used by
+        // class Node::ComputeNode
         class ComputeNodeAllocator {
         public:
-            auto apply_for_memory(RemotePointer seg) -> void {
-                tracker.assign_new_seg(seg);
+            auto apply_for_memory(RemotePointer seg, RemotePointer base) -> void {
+                tracker.assign_new_seg(seg, base);
             }
 
             auto return_memory() -> bool;
@@ -135,6 +172,8 @@ namespace DiStore {
             auto refill(const std::thread::id &id) -> bool;
 
             auto refill_single_page(const std::thread::id &id, AllocationClass ac) -> bool;
+
+            auto dump() const noexcept -> void;
 
             inline auto get_class(size_t sz) -> AllocationClass {
                 static AllocationClass table[] = {
@@ -156,7 +195,7 @@ namespace DiStore {
         private:
             SegmentTracker tracker;
             std::unordered_map<std::thread::id, PageGroup *> thread_info;
-
+            std::mutex mutex;
         };
 
 
@@ -164,7 +203,14 @@ namespace DiStore {
         public:
             RemoteMemoryManager() = default;
 
-            // parse config file to find all memory nodes
+            /*
+             * parse config file to find all memory nodes
+             * config file format
+             * #        tcp              roce            erpc
+             * node: 127.0.0.1.1234, 127.0.0.1:4321, 127.0.0.1:3124
+             * node: 127.0.0.1.1234, 127.0.0.1:4321, 127.0.0.1:3124
+             * node: 127.0.0.1.1234, 127.0.0.1:4321, 127.0.0.1:3124
+             */
             auto parse_config_file(const std::string &config) -> bool;
 
             // connect all memory nodes presented in the config file
@@ -181,7 +227,8 @@ namespace DiStore {
             auto operator=(const RemoteMemoryManager &) = delete;
             auto operator=(RemoteMemoryManager &&) = delete;
         private:
-            std::vector<Cluster::MemoryNodeInfo> memory_nodes;
+            int current;
+            std::vector<std::unique_ptr<Cluster::MemoryNodeInfo>> memory_nodes;
             std::vector<std::unique_ptr<RDMAContext>> rdma;
         };
     }

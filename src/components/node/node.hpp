@@ -1,7 +1,7 @@
 #ifndef __DISTORE__NODE__NODE__
 #define __DISTORE__NODE__NODE__
-#include "../memory/memory.hpp"
-#include "../memory/remote_memory/remote_memory.hpp"
+#include "memory/memory.hpp"
+#include "memory/remote_memory/remote_memory.hpp"
 
 #include <regex>
 namespace DiStore {
@@ -22,7 +22,7 @@ namespace DiStore {
                 }
                 return addr;
             }
-            
+
             auto to_string() const -> std::string {
                 std::stringstream stream;
                 stream << std::to_string(content[0]);
@@ -32,9 +32,10 @@ namespace DiStore {
                 return stream.str();
             }
         } __attribute__((packed));
-        
+
         struct NodeInfo {
             int node_id;
+
             IPV4Addr tcp_addr;
             int tcp_port;
 
@@ -42,17 +43,16 @@ namespace DiStore {
             int roce_port;
 
             IPV4Addr erpc_addr;
-            IPV4Addr erpc_port;
+            int erpc_port;
         } __attribute__((packed));
-        
+
         struct ComputeNodeInfo : NodeInfo {
-            
+
         };
-        
+
         struct MemoryNodeInfo : NodeInfo {
             Memory::RemotePointer base_addr;
         };
     }
 }
 #endif
-

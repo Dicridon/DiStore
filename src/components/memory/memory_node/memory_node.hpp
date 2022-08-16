@@ -1,13 +1,9 @@
 #ifndef __DISTORE__MEMORY__MEMORY_NODE__MEMORY_NODE__
 #define __DISTORE__MEMORY__MEMORY_NODE__MEMORY_NODE__
-#include "../memory.hpp"
-#include "../remote_memory/remote_memory.hpp"
+#include "memory/memory.hpp"
+#include "memory/remote_memory/remote_memory.hpp"
 namespace DiStore {
     namespace Memory {
-        namespace Constants {
-            constexpr size_t SEGMENT_SIZE = 1 << 30UL;
-        }
-
         class MemoryNodeAllocator {
         public:
             static auto make_allocator(byte_ptr_t region, size_t memory_size) -> MemoryNodeAllocator * {

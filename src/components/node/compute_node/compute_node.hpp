@@ -1,6 +1,6 @@
 #ifndef __DISTORE__NODE__COMPUTE_NODE__COMPUTE_NODE__
 #define __DISTORE__NODE__COMPUTE_NODE__COMPUTE_NODE__
-#include "../node.hpp"
+#include "node/node.hpp"
 #include "memory/memory.hpp"
 #include "memory/compute_node/compute_node.hpp"
 #include "kv/kv.hpp"

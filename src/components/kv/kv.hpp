@@ -1,7 +1,7 @@
 #ifndef __DISTORE__KV__KV__
 #define __DISTORE__KV__KV__
 
-#include "../memory/memory.hpp"
+#include "memory/memory.hpp"
 
 #include <cstring>
 namespace DiStore {

@@ -1,21 +1,9 @@
 #ifndef __DISTORE__MEMORY__REMOTE_MEMORY__REMOTE_MEMORY__
 #define __DISTORE__MEMORY__REMOTE_MEMORY__REMOTE_MEMORY__
-#include "../memory.hpp"
-#include "../../rdma_util/rdma_util.hpp"
+#include "memory/memory.hpp"
+#include "rdma_util/rdma_util.hpp"
 namespace DiStore {
     namespace Memory {
-        namespace Constants {
-            static constexpr uint64_t uREMOTE_POINTER_MASK = ~0xffff000000000000UL;
-            static constexpr uint64_t uREMOTE_POINTER_BITS_MASK = 0xc000000000000000UL;
-            static constexpr uint64_t uREMOTE_POINTER_BITS = 0x2UL;
-            static constexpr size_t MEMORY_PAGE_SIZE = 4096;
-            static constexpr uint64_t PAGE_MASK = 0xfffffffffffff000;
-        }
-
-        namespace Enums {
-
-        }
-
         /* !!!NEVER INHERIT FROM ANY OTHER STRUCT OR CLASS!!! */
         /*
          * RemotePointer is a pointer with node infomation embeded in the highest 16 bits.
@@ -35,13 +23,13 @@ namespace DiStore {
         class RemotePointer {
         public:
             inline static auto is_remote_pointer(const byte_ptr_t &ptr) -> bool {
-                auto bits = ((reinterpret_cast<uint64_t>(ptr) & Constants::uREMOTE_POINTER_BITS_MASK) >> 62);
-                return bits == Constants::uREMOTE_POINTER_BITS;
+                auto bits = ((reinterpret_cast<uint64_t>(ptr) & Constants::REMOTE_POINTER_BITS_MASK) >> 62);
+                return bits == Constants::REMOTE_POINTER_BITS;
             }
 
             inline static auto make_remote_pointer(uint64_t node, uint64_t address) -> RemotePointer {
-                auto value = address & Constants::uREMOTE_POINTER_MASK;
-                auto meta = (Constants::uREMOTE_POINTER_BITS << 6) | (node & (0x3fUL));
+                auto value = address & Constants::REMOTE_POINTER_MASK;
+                auto meta = (Constants::REMOTE_POINTER_BITS << 6) | (node & (0x3fUL));
                 auto tmp = (meta << 56) | value;
 
                 // dangerous operation, copy(move) assignment is necessary
@@ -49,8 +37,8 @@ namespace DiStore {
             }
 
             inline static auto make_remote_pointer(uint64_t node, const byte_ptr_t &address) -> RemotePointer {
-                auto value = reinterpret_cast<uint64_t>(address) & Constants::uREMOTE_POINTER_MASK;
-                auto meta = (Constants::uREMOTE_POINTER_BITS << 6) | (node & (~0xc0UL));
+                auto value = reinterpret_cast<uint64_t>(address) & Constants::REMOTE_POINTER_MASK;
+                auto meta = (Constants::REMOTE_POINTER_BITS << 6) | (node & (~0xc0UL));
                 auto tmp = (meta << 56) | value;
 
                 // dangerous operation, copy(move) assignment is necessary
@@ -83,6 +71,10 @@ namespace DiStore {
                 return !(*this == rhs);
             }
 
+            auto operator-(const RemotePointer &rhs) const -> size_t {
+                return ptr - rhs.ptr;
+            }
+
             inline auto get_node() const noexcept -> int {
                 auto value = reinterpret_cast<uint64_t>(ptr);
                 return (value >> 56) & (0x3fUL);
@@ -104,6 +96,12 @@ namespace DiStore {
                 // not quite safe here, but works
                 ptr += off;
                 return *this;
+            }
+
+            inline auto offset_by(size_t off) -> RemotePointer {
+                auto back = *this;
+                back.ptr += off;
+                return back;
             }
 
             inline auto page() const noexcept -> RemotePointer {
