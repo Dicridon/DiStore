@@ -56,6 +56,33 @@ namespace DiStore {
             16, 32, 64, 128, 256, 512, 1024, 2048, 4096
         };
 
+        static auto dump_allocation_class(AllocationClass ac) -> std::string {
+            switch(ac) {
+            case Chunk16:
+                return "Chunk16";
+            case Chunk32:
+                return "Chunk32";
+            case Chunk64:
+                return "Chunk64";
+            case Chunk128:
+                return "Chunk128";
+            case Chunk256:
+                return "Chunk256";
+            case Chunk512:
+                return "Chunk512";
+            case Chunk1024:
+                return "Chunk1024";
+            case Chunk2048:
+                return "Chunk2048";
+            case Chunk4096:
+                return "Chunk4096";
+            case ChunkUnknown:
+                return "ChunkUnkown";
+            default:
+                throw std::invalid_argument("Wrong AllocationClass " + std::to_string(ac));
+            }
+        }
+
         struct PageDescriptor {
             byte_t empty_slots;
             byte_t allocation_class : 5;
@@ -74,7 +101,7 @@ namespace DiStore {
 
             auto clear() -> void {
                 empty_slots = 0;
-                allocation_class = 0;
+                allocation_class = AllocationClass::ChunkUnknown;
                 synced = 0;
                 offset = 0;
             }

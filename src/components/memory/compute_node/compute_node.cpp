@@ -25,10 +25,9 @@ namespace DiStore {
             return ++desc.empty_slots;
         }
 
-        // think more about the detail
         auto PageGroup::allocate(AllocationClass ac) -> RemotePointer {
             for (auto &p : pages) {
-                if (p->desc.allocation_class == ac) {
+                if (p->desc.allocation_class == ac && p->available()) {
                     return p->allocate();
                 } else if (p->desc.allocation_class == AllocationClass::ChunkUnknown) {
                     p->desc.initialize(ac);
@@ -40,16 +39,24 @@ namespace DiStore {
         }
 
         auto PageGroup::available(AllocationClass ac) -> Enums::MemoryAllocationStatus {
-            for (auto &p : pages) {
+            bool have_ac = false;
+            for (size_t i = 0; i < Constants::PAGEGROUP_NO; i++) {
+                auto p = pages[i];
+                if (p->desc.allocation_class == AllocationClass::ChunkUnknown) {
+                    return Enums::MemoryAllocationStatus::Ok;
+                }
+
                 if (p->desc.allocation_class == ac) {
                     if (p->available()) {
                         return Enums::MemoryAllocationStatus::Ok;
                     } else {
-                        return Enums::MemoryAllocationStatus::EmptyPage;
+                        have_ac = true;
                     }
                 }
             }
 
+            if (have_ac)
+                return Enums::MemoryAllocationStatus::EmptyPage;
             return Enums::MemoryAllocationStatus::EmptyPageGroup;
         }
 
@@ -82,10 +89,16 @@ namespace DiStore {
                 throw new std::runtime_error("Received 0 size in " + std::string(__FUNCTION__) + "\n");
             }
 
+            if (sz > Constants::MEMORY_PAGE_SIZE) {
+                throw new std::runtime_error("Size is larger than a page in " + std::string(__FUNCTION__) + "\n");
+            }
+
             auto id = std::this_thread::get_id();
 
             auto group = thread_info.find(id);
             if (group == thread_info.end()) {
+                thread_info.insert({id, new PageGroup});
+                group = thread_info.find(id);
                 if (refill(id) == false)
                     return nullptr;
             }
@@ -144,7 +157,7 @@ namespace DiStore {
 
             auto group = thread_info.find(id);
             for (auto &p : group->second->pages) {
-                if (p->desc.allocation_class == ac) {
+                if (p->desc.allocation_class == ac && !p->available()) {
                     p = tracker.offer_page();
                     p->desc.initialize(ac);
                 }
@@ -237,7 +250,8 @@ namespace DiStore {
             for (const auto &m : pages) {
                 std::cout << "---->> page id: " << m->page_id << "\n";
                 std::cout << "---->> page base: " << m->page_base.void_ptr() << "\n";
-                std::cout << "---->> allocation class: " << m->desc.allocation_class << "\n";
+                auto ac = allocation_class_map[m->desc.allocation_class];
+                std::cout << "---->> allocation class: " << dump_allocation_class(ac) << "\n";
                 std::cout << "---->> empty slots: " << (int)m->desc.empty_slots << "\n";
                 std::cout << "---->> offset: " << (int)m->desc.offset << "\n";
             }
@@ -258,9 +272,10 @@ namespace DiStore {
             tracker.dump();
 
             for (const auto &t : thread_info) {
-                std::cout << ">> Thread " << t.first << " occupies following page group\n\n";
+                std::cout << ">> Thread " << t.first << " occupies following page group\n";
                 t.second->dump();
             }
+            std::cout << "\n";
         }
     }
 }

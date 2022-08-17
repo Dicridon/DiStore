@@ -25,8 +25,8 @@ namespace DiStore {
             static constexpr size_t MEMORY_PAGE_SIZE = 4096;
             static constexpr uint64_t PAGE_MASK = 0xfffffffffffff000;
 #else
-            static constexpr size_t SEGMENT_SIZE = 1 << 10UL;
-            static constexpr size_t PAGEGROUP_NO = 8;
+            static constexpr size_t SEGMENT_SIZE = 1 << 12UL;
+            static constexpr size_t PAGEGROUP_NO = 4;
             static constexpr size_t MEMORY_PAGE_SIZE = 128;
             static constexpr uint64_t PAGE_MASK = 0xffffffffffffff80;
 #endif
