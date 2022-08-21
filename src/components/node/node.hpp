@@ -4,8 +4,20 @@
 #include "memory/remote_memory/remote_memory.hpp"
 
 #include <regex>
+#include <iostream>
 namespace DiStore {
     namespace Cluster {
+        namespace Enums {
+            enum RPCOperations : uint8_t {
+                RemoteAllocation = 0,
+                RemoteDeallocation,
+            };
+        }
+        
+        namespace Constants {
+            static constexpr size_t MAX_NODE = 64;
+        }
+        
         struct IPV4Addr {
             uint8_t content[4];
 
@@ -44,14 +56,20 @@ namespace DiStore {
 
             IPV4Addr erpc_addr;
             int erpc_port;
+
+            virtual auto dump() const noexcept -> void;
         } __attribute__((packed));
 
         struct ComputeNodeInfo : NodeInfo {
 
         };
 
-        struct MemoryNodeInfo : NodeInfo {
+        struct MemoryNodeInfo final : NodeInfo {
             Memory::RemotePointer base_addr;
+            size_t cap = 0;
+            std::unique_ptr<RDMAUtil::RDMAContext> rdma_ctx;
+
+            auto dump() const noexcept -> void override;
         };
     }
 }

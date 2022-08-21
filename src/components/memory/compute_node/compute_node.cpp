@@ -182,7 +182,7 @@ namespace DiStore {
 
             std::string buffer;
             std::regex node_info("(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}):(\\d+)");
-            auto counter = 0;
+            int counter = 0;
             while(std::getline(file, buffer)) {
                 auto mem_node = std::make_unique<Cluster::MemoryNodeInfo>();
                 auto iter = std::sregex_iterator(buffer.begin(), buffer.end(), node_info);
@@ -276,6 +276,14 @@ namespace DiStore {
                 t.second->dump();
             }
             std::cout << "\n";
+        }
+
+        auto RemoteMemoryManager::dump() const noexcept -> void {
+            std::cout << ">> Currently using memory from node " << current <<"\n";
+            std::cout << ">> reporting known memory nodes:\n";
+            for (const auto &m : memory_nodes) {
+                m->dump();
+            }
         }
     }
 }

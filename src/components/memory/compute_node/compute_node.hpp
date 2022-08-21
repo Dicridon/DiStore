@@ -234,9 +234,9 @@ namespace DiStore {
              * parse config file to find all memory nodes
              * config file format
              * #        tcp              roce            erpc
-             * node: 127.0.0.1.1234, 127.0.0.1:4321, 127.0.0.1:3124
-             * node: 127.0.0.1.1234, 127.0.0.1:4321, 127.0.0.1:3124
-             * node: 127.0.0.1.1234, 127.0.0.1:4321, 127.0.0.1:3124
+             * node0: 127.0.0.1:1234, 127.0.0.1:4321, 127.0.0.1:3124
+             * node1: 127.0.0.1:1234, 127.0.0.1:4321, 127.0.0.1:3124
+             * node2: 127.0.0.1:1234, 127.0.0.1:4321, 127.0.0.1:3124
              */
             auto parse_config_file(const std::string &config) -> bool;
 
@@ -247,6 +247,8 @@ namespace DiStore {
 
             auto offer_remote_segment() -> RemotePointer;
             auto recycle_remote_segment(RemotePointer segment) -> bool;
+
+            auto dump() const noexcept -> void;
 
 
             RemoteMemoryManager(const RemoteMemoryManager &) = delete;
@@ -261,3 +263,4 @@ namespace DiStore {
     }
 }
 #endif
+ 
