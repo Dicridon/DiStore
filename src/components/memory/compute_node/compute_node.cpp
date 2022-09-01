@@ -175,10 +175,9 @@ namespace DiStore {
         auto RemoteMemoryManager::parse_config_file(const std::string &config) -> bool {
             std::ifstream file(config);
             if (!file.is_open()) {
-                std::cerr << "Failed to open config file " << config << "\n";
+                Debug::error("Failed to open config file %s\n ", config.c_str());
                 return false;
             }
-
 
             std::string buffer;
             std::regex node_info("(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}):(\\d+)");
@@ -205,30 +204,75 @@ namespace DiStore {
                 memory_nodes.push_back(std::move(mem_node));
             }
             // we set mem_node->base_addr in connect_memory_nodes();
-
-            current = 0;
+            Debug::info("Config file %s parsed\n", config.c_str());
             return true;
         }
 
         auto RemoteMemoryManager::connect_memory_nodes() -> bool {
+            // memory node and its rdma_ctx have the same indexes
             for (const auto &n : memory_nodes) {
                 auto socket = Misc::socket_connect(false, n->tcp_port, n->tcp_addr.to_string().c_str());
-
+                n->socket = socket;
+                auto node = n->tcp_addr.to_string() + std::to_string(n->tcp_port);
                 if (socket == -1) {
-                    std::cerr << "Failed to connect to memory node "
-                              << n->tcp_addr.to_string() + std::to_string(n->tcp_port)
-                              << "\n";
+                    Debug::error("Failed to connect to memory node %s\n", node.c_str());
+                    return false;
                 }
 
                 // here is a low level casting, be cautious
                 auto s = Misc::recv_all(socket, &n->base_addr, sizeof(n->base_addr));
                 if (s != sizeof(n->base_addr)) {
-                    std::cerr << "Failed to receive base address of "
-                              << n->tcp_addr.to_string() + std::to_string(n->tcp_port)
-                              << "\n";
+                    Debug::error("Failed to receive base address of %s\n", node.c_str());
+                    return false;
                 }
+
+
+                int rpc_id = -1;
+                Misc::recv_all(socket, &rpc_id , sizeof(rpc_id));
+                if (rpc_id == -1) {
+                    Debug::error("Failed to receive rpc id of %s\n", node.c_str());
+                    return false;
+                }
+
+                if (!rpc_ctx->connect_remote(n->node_id, n->erpc_addr, n->erpc_port, rpc_id)) {
+                    Debug::error("Failed to establish eRPC connection with node %s at %s:%d",
+                                 node.c_str(), n->erpc_addr.to_string().c_str(), n->erpc_port);
+                    return false;
+                }
+                Debug::info("Successfully connected to node %s", node.c_str());
             }
 
+            return true;
+        }
+
+        auto RemoteMemoryManager::setup_rdma_per_thread(RDMADevice *device) -> bool {
+            auto id = std::this_thread::get_id();
+            auto p = rdma_ctxs.find(id);
+            if (p != rdma_ctxs.end())
+                return true;
+
+            // TODO: update to struct size
+            std::vector<std::unique_ptr<RDMAContext>> rdma;
+
+            for (const auto &n : memory_nodes) {
+                auto [rdma_ctx, status] = device->open(new byte_t[1024], 1024, 1,
+                                                       RDMADevice::get_default_mr_access(),
+                                                       *RDMADevice::get_default_qp_init_attr());
+
+                if (status != RDMAUtil::Enums::Status::Ok) {
+                    Debug::error(">> Failed to open device due to %s \n",
+                                 RDMAUtil::decode_rdma_status(status).c_str());
+                    return false;
+                }
+
+                if (!rdma_ctx->default_connect(n->socket)) {
+                    Debug::error("Failed to establish RDMA with node %d\n", n->node_id);
+                }
+
+                Debug::info("RDMA with node %d established\n", n->node_id);
+                rdma.push_back(std::move(rdma_ctx));
+            }
+            rdma_ctxs.insert({id, std::move(rdma)});
             return true;
         }
 
@@ -238,7 +282,27 @@ namespace DiStore {
 
         auto RemoteMemoryManager::offer_remote_segment() -> RemotePointer {
             auto &mem_node = memory_nodes[(current++) % memory_nodes.size()];
-            // TODO: do the erpc job
+            auto id = mem_node->node_id;
+            auto info = rpc_ctx->select_first_info(id);
+
+            info->done = false;
+            info->rpc->resize_msg_buffer(&info->req_buf, 8);
+            *reinterpret_cast<uint64_t *>(info->req_buf.buf) = 0UL;
+
+            info->rpc->enqueue_request(info->session, Cluster::Enums::RPCOperations::RemoteAllocation,
+                                       &info->req_buf, &info->resp_buf, memory_continuation, nullptr);
+            while(!info->done){
+                info->rpc->run_event_loop_once();
+            }
+
+            auto remote = *reinterpret_cast<RemotePointer *>(info->resp_buf.buf);
+            if (remote.is_nullptr()) {
+                // try another memory node until success
+                Debug::info("Nested call of %s to get remote memory\n", __FUNCTION__);
+                offer_remote_segment();
+            }
+
+            return remote;
         }
 
         auto RemoteMemoryManager::recycle_remote_segment(RemotePointer segment) -> bool {

@@ -7,7 +7,7 @@ namespace DiStore {
             nexus = new erpc::Nexus(uri, 0, 0);
 
             if (nexus == nullptr) {
-                std::cerr << ">> Failed to create nexus for node <" << uri << ">\n";
+                Debug::error("Failed to create nexus for node %s\n", uri.c_str());
                 return false;
             }
             return true;
@@ -20,15 +20,14 @@ namespace DiStore {
         }
 
         auto ServerRPCContext::loop(size_t timeout_ms) -> void {
-            auto info = create_new_rpc();
+            info = create_new_rpc();
             info->rpc->run_event_loop(timeout_ms);
         }
 
         auto ServerRPCContext::loop_thread() -> std::thread {
-            auto info = create_new_rpc();
+            info = create_new_rpc();
             auto info_raw = info.get();
-            infos.push_back(std::move(info));
-
+            
             std::thread t([info_raw]() {
                 while(true) {
                     info_raw->rpc->run_event_loop(200);
@@ -39,14 +38,14 @@ namespace DiStore {
         }
 
         auto ClientRPCContext::connect_remote(int node_id, Cluster::IPV4Addr &remote_ip, int remote_port, int rpc_id) -> bool {
-            auto info = create_new_rpc(node_id, rpc_id);
+            auto &info = create_new_rpc(node_id, rpc_id);
 
             auto remote_uri = remote_ip.to_string() + ":" + std::to_string(remote_port);
 
             auto s = info->rpc->create_session(remote_uri, rpc_id);
 
             if (s == -1) {
-                std::cerr << ">> Failed to connect " << remote_uri << "\n";
+                Debug::error("Failed to connect %s\n", remote_uri.c_str());
                 return false;
             }
 
@@ -56,8 +55,10 @@ namespace DiStore {
             }
 
             infos.push_back(std::move(info));
+            Debug::info("Connected to remote ", remote_uri.c_str());
         }
 
+        // we will not store many infos, thus linear searching is acceptable
         auto ClientRPCContext::select_info(int node_id, int remote_id, int session) -> RPCConnectionInfo * {
             for (auto &i : infos) {
                 if (i->node_id == node_id && i->remote_id == remote_id && i->session == session)

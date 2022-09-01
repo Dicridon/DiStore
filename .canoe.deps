@@ -12,13 +12,15 @@
 ./src/components/node/node.cpp: ./src/components/node/node.hpp
 ./src/components/node/node.hpp: ./src/components/memory/memory.hpp ./src/components/memory/remote_memory/remote_memory.hpp
 ./src/components/node/compute_node/compute_node.cpp: ./src/components/node/compute_node/compute_node.hpp
-./src/components/node/compute_node/compute_node.hpp: ./src/components/node/node.hpp ./src/components/memory/memory.hpp ./src/components/memory/compute_node/compute_node.hpp ./src/components/kv/kv.hpp
-./src/components/node/memory_node/memory_node.hpp: 
+./src/components/node/compute_node/compute_node.hpp: ./src/components/node/node.hpp ./src/components/memory/memory.hpp ./src/components/memory/compute_node/compute_node.hpp ./src/components/kv/kv.hpp ./src/components/erpc_wrapper/erpc_wrapper.hpp
+./src/components/node/memory_node/memory_node.hpp: ./src/components/node/node.hpp ./src/components/memory/memory_node/memory_node.hpp ./src/components/erpc_wrapper/erpc_wrapper.hpp ./src/components/rdma_util/rdma_util.hpp ./src/components/misc/misc.hpp
 ./src/components/node/memory_node/memory_node.cpp: ./src/components/node/memory_node/memory_node.hpp
 ./src/components/tests/tests.cpp: ./src/components/tests/tests.hpp
 ./src/components/tests/tests.hpp: 
 ./src/components/data_layer/data_layer.hpp: 
 ./src/components/data_layer/data_layer.cpp: ./src/components/data_layer/data_layer.hpp
+./src/components/erpc_wrapper/erpc_wrapper.hpp: ./src/components/node/node.hpp
+./src/components/erpc_wrapper/erpc_wrapper.cpp: ./src/components/erpc_wrapper/erpc_wrapper.hpp
 ./src/components/config/config.hpp: 
 ./src/components/config/config.cpp: ./src/components/config/config.hpp
 ./src/components/rdma_util/rdma_util.hpp: ./src/components/memory/memory.hpp

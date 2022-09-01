@@ -1,7 +1,7 @@
 #ifndef __DISTORE__CONFIG__CONFIG__
 #define __DISTORE__CONFIG__CONFIG__
 
-#define DEBUG
+#define __DEBUG__
 namespace DiStore {
     namespace Config {
 

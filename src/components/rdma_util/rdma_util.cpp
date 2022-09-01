@@ -48,25 +48,25 @@ namespace DiStore {
 
         auto RDMAContext::default_connect(int socket) -> int {
             if (auto status = exchange_certificate(socket); status != Status::Ok) {
-                std::cerr << "Failed to exchange RDMA, error code: " << decode_rdma_status(status) << "\n";
+                Debug::error("Failed to exchange RDMA, error code: %s\n", decode_rdma_status(status).c_str());
                 return -1;
             }
 
             auto init_attr = RDMADevice::get_default_qp_init_state_attr();
             if (auto [status, err] = modify_qp(*init_attr, RDMADevice::get_default_qp_init_state_attr_mask()); status != Status::Ok) {
-                std::cerr << "Modify QP to Init failed, error code: " << err << "\n";
+                Debug::error("Modify QP to Init failed, error code: %d\n", err);
                 return err;
             }
 
             auto rtr_attr = RDMADevice::get_default_qp_rtr_attr(remote, device->get_ib_port(), device->get_gid_idx());
             if (auto [status, err] = modify_qp(*rtr_attr, RDMADevice::get_default_qp_rtr_attr_mask()); status != Status::Ok) {
-                std::cerr << "Modify QP to Rtr failed, error code: " << err << "\n";
+                Debug::error("Modify QP to RTR failed, error code: %d\n", err);
                 return err;
             }
 
             auto rts_attr = RDMADevice::get_default_qp_rts_attr();
             if (auto [status, err] = modify_qp(*rts_attr, RDMADevice::get_default_qp_rts_attr_mask()); status != Status::Ok) {
-                std::cerr << "Modify QP to Rts failed, error code: " << err << "\n";
+                Debug::error("Modify QP to RTS failed, error code: %d\n", err);
                 return err;
             }
             return 0;

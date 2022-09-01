@@ -1,6 +1,7 @@
 #ifndef __DISTORE__RDMA_UTIL__RDMA_UTIL__
 #define __DISTORE__RDMA_UTIL__RDMA_UTIL__
 #include "memory/memory.hpp"
+#include "debug/debug.hpp"
 
 #include <memory>
 #include <optional>

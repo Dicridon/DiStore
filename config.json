@@ -4,12 +4,23 @@
     "source-suffix": "cpp",
     "flags": {
         "compile": {
-            "opt": "-O2",
+            "opt": "-O0",
             "debug": "-g",
-            "std": "-std=c++17"
+            "warning": "-Wunused-parameter -Wunused-variable -Wunused-private-field -Wunused-const-variable",
+            "std": "-std=c++17",
+            "boost": "-Ithird-party/boost_1_77_0",
+            "eRPC": "-Ithird-party/eRPC/src",
+            "eRPC-third": "-Ithird-party/eRPC/third_party/asio/include",
+            "infiniband": "-DERPC_INFINIBAND=true",
+            "roce": "-DROCE=true"
         },
         "link": {
-            "ibverbs": "-libverbs"
+            "rdma": "-libverbs",
+            "pmem": "-lpmem",
+            "thread": "-lpthread",
+            "eRPC": "-Lthird-party/eRPC/build -lerpc",
+            "numa": "-lnuma",
+            "atomic": "-latomic"
         }
     }
 }

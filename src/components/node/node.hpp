@@ -5,6 +5,7 @@
 
 #include <regex>
 #include <iostream>
+#include <fstream>
 namespace DiStore {
     namespace Cluster {
         namespace Enums {
@@ -43,6 +44,7 @@ namespace DiStore {
                 }
                 return stream.str();
             }
+
         } __attribute__((packed));
 
         struct NodeInfo {
@@ -56,6 +58,10 @@ namespace DiStore {
 
             IPV4Addr erpc_addr;
             int erpc_port;
+
+            int socket;
+
+            static auto initialize(std::ifstream &config, NodeInfo *node) -> void;
 
             virtual auto dump() const noexcept -> void;
         } __attribute__((packed));

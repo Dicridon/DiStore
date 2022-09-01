@@ -5,12 +5,32 @@
 #include "erpc_wrapper/erpc_wrapper.hpp"
 #include "rdma_util/rdma_util.hpp"
 #include "misc/misc.hpp"
+#include "debug/debug.hpp"
 
 namespace DiStore {
     using namespace RPCWrapper;
     namespace Cluster {
         class MemoryNode {
         public:
+            /*
+             * RPC request format
+             * 1. allocate:
+             *    |             first byte          | following bytes
+             *    | RPCOperations::RemoteAllocation |
+             *
+             * 2. deallocate:
+             *    |             first byte            | following bytes
+             *    | RPCOperations::RemoteDeallocation | RemotePointer segment
+             *
+             * RPC response format
+             * 1. allocate:
+             *    |  first 8 bytes | following bytes
+             *    |  RemotePointer |
+             * 2. deallocate:
+             *    |  first byte  | following bytes
+             *    |  true/false  |
+             *
+             */
             static auto allocation_handler(erpc::ReqHandle *req_handle, void *ctx) -> void;
             static auto deallocation_handler(erpc::ReqHandle *req_handle, void *ctx) -> void;
 
@@ -34,45 +54,29 @@ namespace DiStore {
             auto operator=(const MemoryNode &) = delete;
             auto operator=(MemoryNode &&) = delete;
         private:
+            // do not use smart pointer here
+            Memory::MemoryNodeAllocator *allocator;
             ServerRPCContext memory_ctx;
             MemoryNodeInfo self_info;
             std::unique_ptr<RDMAUtil::RDMAContext> rdma_ctx;
 
             auto initialize_addresses(std::ifstream &config) -> void {
-                std::string buffer;
-                std::regex node_info("node(\\d+):\\s*(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}):(\\d+)");
-                while(std::getline(config, buffer)) {
-                    auto iter = std::sregex_iterator(buffer.begin(), buffer.end(), node_info);
-                    std::smatch match = *iter;
-                    // can throw exception here
-                    self_info.node_id = atoi(match[1].str().c_str());
-
-                    ++iter;
-                    match = *iter;
-                    self_info.tcp_addr = Cluster::IPV4Addr::make_ipv4_addr(match[2].str()).value();
-                    self_info.tcp_port = atoi(match[3].str().c_str());
-
-                    ++iter;
-                    match = *iter;
-                    self_info.roce_addr = Cluster::IPV4Addr::make_ipv4_addr(match[2].str()).value();
-                    self_info.roce_port = atoi(match[3].str().c_str());
-
-                    ++iter;
-                    match = *iter;
-                    self_info.erpc_addr = Cluster::IPV4Addr::make_ipv4_addr(match[2].str()).value();
-                    self_info.erpc_port = atoi(match[3].str().c_str());
-                }
-                config.clear();
-                config.seekg(0);
+                NodeInfo::initialize(config, &self_info);
             }
 
             auto initialize_erpc() -> bool {
+               auto uri = self_info.erpc_addr.to_string() + ":" + std::to_string(self_info.erpc_port);
                 if (!memory_ctx.initialize_nexus(self_info.erpc_addr, self_info.erpc_port)) {
-                    auto uri = self_info.erpc_addr.to_string() + ":" + std::to_string(self_info.erpc_port);
-                    std::cerr << ">> Failed to initialize nexus at " << uri << "\n";
+                    Debug::error("Failed to initialize nexus at %s\n", uri.c_str());
                     return false;
                 }
 
+                memory_ctx.register_req_func(Enums::RPCOperations::RemoteAllocation, allocation_handler);
+                memory_ctx.register_req_func(Enums::RPCOperations::RemoteDeallocation, deallocation_handler);
+
+                // memory_ctx will be passed to an eRPC instance upon create_new_rpc
+                memory_ctx.user_context = this;
+                Debug::info("Memory node eRPC initialized at %s\n", uri.c_str());
                 return true;
             }
 
@@ -84,17 +88,21 @@ namespace DiStore {
                 std::regex rmem("mem_cap: (\\d+)");
                 std::smatch vmem;
                 if (!std::regex_search(content, vmem, rmem)) {
-                    std::cout << ">> Failed to read memory capacity\n";
+                    Debug::error(">> Failed to read memory capacity\n");
                     return false;
                 }
 
                 auto cap = atoi(vmem[1].str().c_str());
                 auto mem = new Memory::byte_t[cap];
-                self_info.cap = cap;
-                self_info.base_addr = Memory::RemotePointer::make_remote_pointer(self_info.node_id, mem);
+                auto off = Memory::Constants::MEMORY_PAGE_SIZE;
+
+                self_info.cap = cap - off;
+                self_info.base_addr = Memory::RemotePointer::make_remote_pointer(self_info.node_id, mem + off);
+                allocator = Memory::MemoryNodeAllocator::make_allocator(mem, cap);
 
                 config.clear();
                 config.seekg(0);
+                Debug::info("Memory node memory intialized with capacity being %ld", cap);
                 return true;
             }
 
@@ -115,27 +123,27 @@ namespace DiStore {
                 std::smatch vgid;
 
                 if (!std::regex_search(content, vdevice, rdevice)) {
-                    std::cerr << ">> Failed to read RDMA device info\n";
+                    Debug::error("Failed to read RDMA device info\n");
                     return false;
                 }
                 auto device = vdevice[1].str();
 
                 if (!std::regex_search(content, vport, rport)) {
-                    std::cerr << ">> Failed to read RDMA port info\n";
+                    Debug::error("Failed to read RDMA port info\n");
                     return false;
                 }
                 auto port = atoi(vport[1].str().c_str());
 
                 if (!std::regex_search(content, vgid, rgid)) {
-                    std::cerr << ">> Failed to read RDMA gid info\n";
+                    Debug::error("Failed to read RDMA gid info\n");
                     return false;
                 }
                 auto gid = atoi(vgid[1].str().c_str());
 
                 auto [rdma_dev, status] = RDMAUtil::RDMADevice::make_rdma(device, port, gid);
                 if (status != RDMAUtil::Enums::Status::Ok) {
-                    std::cerr << ">> Failed to create RDMA device due to "
-                              << RDMAUtil::decode_rdma_status(status);
+                    Debug::error("Failed to create RDMA device due to %s",
+                                 RDMAUtil::decode_rdma_status(status).c_str());
                     return false;
                 }
 
@@ -144,12 +152,14 @@ namespace DiStore {
                                                     RDMAUtil::RDMADevice::get_default_mr_access(),
                                                     *RDMAUtil::RDMADevice::get_default_qp_init_attr());
                 if (s != RDMAUtil::Enums::Status::Ok) {
-                    std::cerr << ">> Failed to open RDMA device due to "
-                              << RDMAUtil::decode_rdma_status(s);
+                    Debug::error(">> Failed to open RDMA device due to %s",
+                                 RDMAUtil::decode_rdma_status(s).c_str());
                     return false;
                 }
 
                 self_info.rdma_ctx = std::move(rdma_ctx);
+                auto uri = self_info.tcp_addr.to_string() + std::to_string(self_info.tcp_port);
+                Debug::info("RDMA is initialized for memory node %s\n", uri.c_str());
                 return true;
             }
         };

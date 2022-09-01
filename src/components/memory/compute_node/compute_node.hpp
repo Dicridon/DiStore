@@ -6,6 +6,8 @@
 #include "memory/memory_node/memory_node.hpp"
 #include "rdma_util/rdma_util.hpp"
 #include "misc/misc.hpp"
+#include "erpc_wrapper/erpc_wrapper.hpp"
+#include "debug/debug.hpp"
 
 #include <unordered_map>
 #include <thread>
@@ -226,8 +228,14 @@ namespace DiStore {
         };
 
 
-        class RemoteMemoryManager {
-        public:
+
+        // single-thread implementation since it's not frequently used
+        struct RemoteMemoryManager {
+            int current;
+            std::vector<std::unique_ptr<Cluster::MemoryNodeInfo>> memory_nodes;
+            std::unordered_map<std::thread::id, std::vector<std::unique_ptr<RDMAContext>>> rdma_ctxs;
+            RPCWrapper::ClientRPCContext *rpc_ctx;
+
             RemoteMemoryManager() = default;
 
             /*
@@ -240,13 +248,59 @@ namespace DiStore {
              */
             auto parse_config_file(const std::string &config) -> bool;
 
-            // connect all memory nodes presented in the config file
+            // connect all memory nodes presented in the config file via socket
             auto connect_memory_nodes() -> bool;
+
+            // set up per-thread RDMA connection with memory nodes
+            auto setup_rdma_per_thread(RDMADevice *device) -> bool;
+
+
+            // The underlying RDMA buffer is directly returned to user to void message copy
+            template<typename T,
+                     typename std::enable_if<std::is_pointer_v<T>>>
+            auto fetch_as(const RemotePointer &p, size_t size) -> T {
+                auto node_id = p.get_node();
+                auto addr = p.get_as<byte_ptr_t>();
+
+                auto id = std::this_thread::get_id();
+
+                auto ctxs = rdma_ctxs.find(id);
+
+                auto ctx = ctxs->second[node_id].get();
+
+                ctx->post_read(addr, size);
+                ctx->poll_one_completion();
+
+                return reinterpret_cast<T>(ctx->buf);
+            }
+
+            // content should already be prepared in the buffer returned from fetch_as
+            auto write_to(const RemotePointer &p, size_t size) -> bool {
+                auto node_id = p.get_node();
+                auto addr = p.get_as<byte_ptr_t>();
+
+                auto id = std::this_thread::get_id();
+
+                auto ctxs = rdma_ctxs.find(id);
+
+                auto ctx = ctxs->second[node_id].get();
+
+                ctx->post_write(addr, nullptr, size);
+                auto [wc, _] = ctx->poll_one_completion();
+                if (wc)
+                    return false;
+                return true;
+            }
 
             auto get_base_addr(int node_id) -> RemotePointer;
 
             auto offer_remote_segment() -> RemotePointer;
             auto recycle_remote_segment(RemotePointer segment) -> bool;
+
+            static auto memory_continuation(void *ctx, void *tag) -> void {
+                auto info = reinterpret_cast<RPCWrapper::RPCConnectionInfo *>(ctx);
+                info->done = true;
+            }
 
             auto dump() const noexcept -> void;
 
@@ -255,12 +309,7 @@ namespace DiStore {
             RemoteMemoryManager(RemoteMemoryManager &&) = delete;
             auto operator=(const RemoteMemoryManager &) = delete;
             auto operator=(RemoteMemoryManager &&) = delete;
-        private:
-            int current;
-            std::vector<std::unique_ptr<Cluster::MemoryNodeInfo>> memory_nodes;
-            std::vector<std::unique_ptr<RDMAContext>> rdma;
         };
     }
 }
 #endif
- 

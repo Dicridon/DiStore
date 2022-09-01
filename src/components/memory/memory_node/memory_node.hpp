@@ -21,11 +21,14 @@ namespace DiStore {
                     return nullptr;
                 }
 
-                return reinterpret_cast<byte_ptr_t>(this) + Constants::MEMORY_PAGE_SIZE + no.value() * Constants::SEGMENT_SIZE;
+                auto hdr_size = Constants::MEMORY_PAGE_SIZE;
+                auto off = no.value() * Constants::SEGMENT_SIZE;
+                return reinterpret_cast<byte_ptr_t>(this) + hdr_size + off;
             }
             
             auto deallocate(byte_ptr_t segment) -> void {
-                auto pos = (segment - reinterpret_cast<byte_ptr_t>(this) - Constants::MEMORY_PAGE_SIZE) / Constants::SEGMENT_SIZE;
+                auto off = segment - reinterpret_cast<byte_ptr_t>(this) - Constants::MEMORY_PAGE_SIZE;
+                auto pos = off / Constants::SEGMENT_SIZE;
                 bitmap.unset(pos);
             }
 
