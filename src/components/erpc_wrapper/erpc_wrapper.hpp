@@ -42,7 +42,8 @@ namespace DiStore::RPCWrapper {
         std::unique_ptr<RPCConnectionInfo> info;
 
         auto register_req_func(uint8_t req_type, erpc::erpc_req_func_t req_func,
-                               erpc::ReqFuncType req_func_type = erpc::ReqFuncType::kForeground) -> int;
+                               erpc::ReqFuncType req_func_type = erpc::ReqFuncType::kForeground)
+            -> int;
         auto loop(size_t timeout_ms) -> void;
         auto loop_thread() -> std::thread;
         auto create_new_rpc(size_t buffer_size = 64) -> std::unique_ptr<RPCConnectionInfo> {
@@ -61,7 +62,9 @@ namespace DiStore::RPCWrapper {
     struct ClientRPCContext : RPCContext {
         std::vector<std::unique_ptr<RPCConnectionInfo>> infos;
 
-        auto create_new_rpc(int node_id, int rpc_id, size_t buffer_size = 64) -> std::unique_ptr<RPCConnectionInfo> & {
+        auto create_new_rpc(int node_id, int rpc_id, size_t buffer_size = 64)
+            -> std::unique_ptr<RPCConnectionInfo> &
+        {
             auto rpc_info = std::make_unique<RPCConnectionInfo>();
 
             rpc_info->rpc = std::make_unique<erpc::Rpc<erpc::CTransport>>(nexus,
@@ -78,10 +81,13 @@ namespace DiStore::RPCWrapper {
             return infos.back();
         }
 
-        auto connect_remote(int node_id, Cluster::IPV4Addr &remote_ip, int remote_port, int rpc_id) -> bool;
-        auto select_info(int node_id, int remote_id, int session) -> RPCConnectionInfo *;
-        auto select_first_info(int node_id) -> RPCConnectionInfo *;
-        auto selecnt_all_info(int node_id) -> std::vector<RPCConnectionInfo *>;
+        auto connect_remote(int node_id, Cluster::IPV4Addr &remote_ip, int remote_port,
+                            int rpc_id) noexcept
+            -> bool;
+        auto select_info(int node_id, int remote_id, int session) const noexcept
+            -> RPCConnectionInfo *;
+        auto select_first_info(int node_id) const noexcept -> RPCConnectionInfo *;
+        auto selecnt_all_info(int node_id) const noexcept -> std::vector<RPCConnectionInfo *>;
         // we do not implement send_request for the wrapper because the augument list is too long
     };
 }

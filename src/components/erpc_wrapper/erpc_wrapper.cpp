@@ -26,7 +26,7 @@ namespace DiStore::RPCWrapper {
     auto ServerRPCContext::loop_thread() -> std::thread {
         info = create_new_rpc();
         auto info_raw = info.get();
-            
+
         std::thread t([info_raw]() {
             while(true) {
                 info_raw->rpc->run_event_loop(200);
@@ -36,7 +36,10 @@ namespace DiStore::RPCWrapper {
         return t;
     }
 
-    auto ClientRPCContext::connect_remote(int node_id, Cluster::IPV4Addr &remote_ip, int remote_port, int rpc_id) -> bool {
+    auto ClientRPCContext::connect_remote(int node_id, Cluster::IPV4Addr &remote_ip,
+                                          int remote_port, int rpc_id) noexcept
+        -> bool
+    {
         auto &info = create_new_rpc(node_id, rpc_id);
 
         auto remote_uri = remote_ip.to_string() + ":" + std::to_string(remote_port);
@@ -58,7 +61,9 @@ namespace DiStore::RPCWrapper {
     }
 
     // we will not store many infos, thus linear searching is acceptable
-    auto ClientRPCContext::select_info(int node_id, int remote_id, int session) -> RPCConnectionInfo * {
+    auto ClientRPCContext::select_info(int node_id, int remote_id, int session) const noexcept
+        -> RPCConnectionInfo *
+    {
         for (auto &i : infos) {
             if (i->node_id == node_id && i->remote_id == remote_id && i->session == session)
                 return i.get();
@@ -67,7 +72,9 @@ namespace DiStore::RPCWrapper {
         return nullptr;
     }
 
-    auto ClientRPCContext::select_first_info(int node_id) -> RPCConnectionInfo * {
+    auto ClientRPCContext::select_first_info(int node_id) const noexcept
+        -> RPCConnectionInfo *
+    {
         for (auto &i : infos) {
             if (i->node_id == node_id)
                 return i.get();
@@ -76,7 +83,9 @@ namespace DiStore::RPCWrapper {
         return nullptr;
     }
 
-    auto ClientRPCContext::selecnt_all_info(int node_id) -> std::vector<RPCConnectionInfo *> {
+    auto ClientRPCContext::selecnt_all_info(int node_id) const noexcept
+        -> std::vector<RPCConnectionInfo *>
+    {
         std::vector<RPCConnectionInfo *> ret;
         for (auto &i : infos) {
             if (i->node_id == node_id)

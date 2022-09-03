@@ -155,7 +155,8 @@ namespace DiStore::Memory {
     struct SegmentTracker {
         Segment *current;
 
-        std::unordered_map<RemotePointer, std::unique_ptr<Segment>, RemotePointer::RemotePointerHasher> segments;
+        std::unordered_map<RemotePointer, std::unique_ptr<Segment>,
+                           RemotePointer::RemotePointerHasher> segments;
 
         auto assign_new_seg(RemotePointer seg, RemotePointer base) -> void {
             auto segment = std::make_unique<Segment>(seg, base);
