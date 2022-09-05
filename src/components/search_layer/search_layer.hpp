@@ -65,6 +65,8 @@ namespace DiStore::SearchLayer {
         auto update(const std::string &anchor, const RemotePointer &r) noexcept -> bool;
         auto search(const std::string &anchor) const noexcept -> RemotePointer;
 
+        auto dump() const noexcept -> void;
+
         // delete and range are not needed
     private:
         int current_level;

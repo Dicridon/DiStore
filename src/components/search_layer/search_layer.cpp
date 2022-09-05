@@ -10,7 +10,7 @@ namespace DiStore::SearchLayer {
 
     auto SkipList::insert(const std::string &anchor, const RemotePointer &r) noexcept -> bool {
         SkipListNode *update[Constants::MAX_LEVEL] = {nullptr};
-        SkipListNode *walker = head;
+        auto *walker = head;
 
         for (int i = current_level - 1; i >= 0; i--) {
             while (walker->forwards[i] && walker->forwards[i]->anchor < anchor) {
@@ -55,6 +55,18 @@ namespace DiStore::SearchLayer {
         return nullptr;
     }
 
+    auto SkipList::dump() const noexcept -> void {
+        for (int i = current_level - 1; i >= 0; i--) {
+            auto walker = head;
+            while (walker->forwards[i]) {
+                walker = walker->forwards[i];
+                std::cout << walker->anchor << " ";
+            }
+            std::cout << "\n";
+        }
+
+    }
+
     auto SkipList::search_node(const std::string &anchor) const noexcept -> SkipListNode * {
         SkipListNode *walker = head;
 
@@ -65,7 +77,7 @@ namespace DiStore::SearchLayer {
         }
 
         if (walker->forwards[0]->anchor == anchor) {
-            return walker;
+            return walker->forwards[0];
         }
 
         return nullptr;
