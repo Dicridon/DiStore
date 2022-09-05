@@ -179,11 +179,17 @@ namespace DiStore::Memory {
         }
 
         std::string buffer;
-        std::regex node_info("(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}):(\\d+)");
-        int counter = 0;
+        std::regex uri("\\s*(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}):(\\d+)");
+        std::regex nid("node(\\d+)");
         while(std::getline(file, buffer)) {
             auto mem_node = std::make_unique<Cluster::MemoryNodeInfo>();
-            auto iter = std::sregex_iterator(buffer.begin(), buffer.end(), node_info);
+
+            std::smatch nid_v;
+            if (std::regex_search(buffer, nid_v, nid)) {
+                mem_node->node_id = atoi(nid_v[1].str().c_str());
+            }
+            
+            auto iter = std::sregex_iterator(buffer.begin(), buffer.end(), uri);
             std::smatch match = *iter;
             // can throw exception here
             mem_node->tcp_addr = Cluster::IPV4Addr::make_ipv4_addr(match[1].str()).value();
@@ -199,7 +205,6 @@ namespace DiStore::Memory {
             mem_node->erpc_addr = Cluster::IPV4Addr::make_ipv4_addr(match[1].str()).value();
             mem_node->erpc_port = atoi(match[2].str().c_str());
 
-            mem_node->node_id = counter++;
             memory_nodes.push_back(std::move(mem_node));
         }
         // we set mem_node->base_addr in connect_memory_nodes();
@@ -209,10 +214,11 @@ namespace DiStore::Memory {
 
     auto RemoteMemoryManager::connect_memory_nodes() -> bool {
         // memory node and its rdma_ctx have the same indexes
+        int successed = 0;
         for (const auto &n : memory_nodes) {
             auto socket = Misc::socket_connect(false, n->tcp_port, n->tcp_addr.to_string().c_str());
             n->socket = socket;
-            auto node = n->tcp_addr.to_string() + std::to_string(n->tcp_port);
+            auto node = n->tcp_addr.to_uri(n->tcp_port);
             if (socket == -1) {
                 Debug::error("Failed to connect to memory node %s\n", node.c_str());
                 return false;
@@ -234,12 +240,15 @@ namespace DiStore::Memory {
             }
 
             if (!rpc_ctx->connect_remote(n->node_id, n->erpc_addr, n->erpc_port, rpc_id)) {
-                Debug::error("Failed to establish eRPC connection with node %s at %s:%d",
-                             node.c_str(), n->erpc_addr.to_string().c_str(), n->erpc_port);
+                Debug::error("Failed to establish eRPC connection with node %s at %s",
+                             node.c_str(), n->erpc_addr.to_uri(n->erpc_port).c_str());
                 return false;
             }
             Debug::info("Successfully connected to node %s", node.c_str());
+            ++successed;
         }
+
+        Debug::info("%d out of %ld memory nodes connected\n", successed, memory_nodes.size());
 
         return true;
     }

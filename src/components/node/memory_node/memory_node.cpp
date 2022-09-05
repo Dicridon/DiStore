@@ -51,7 +51,7 @@ namespace DiStore::Cluster {
             return false;
         }
 
-        auto uri = self_info.tcp_addr.to_string() + std::to_string(self_info.tcp_port);
+        auto uri = self_info.tcp_addr.to_uri(self_info.tcp_port);
         Debug::info("Memory node %s is initialized\n", uri.c_str());
         return true;
     }

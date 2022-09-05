@@ -12,6 +12,25 @@ namespace DiStore::Cluster {
     using namespace RPCWrapper;
     class ComputeNode {
     public:
+        static auto make_compute_node(const std::string &compute_config, const std::string &memory_config)
+            -> std::unique_ptr<ComputeNode>
+        {
+            auto ret = std::make_unique<ComputeNode>();
+            if (!ret->initialize(compute_config, memory_config)) {
+                Debug::error("Failed to initialize compute node\n");
+                return nullptr;
+            }
+
+            return ret;
+        }
+        /*
+         * format of compute_config
+         * #       tcp            roce         erpc
+         * node: 1.1.1.1:123, 2.2.2.2:123, 3.3.3.3:123
+         * rdma_device: mlx5_0
+         * rdma_port: 1
+         * gid_idx: 4
+         */
         auto initialize(const std::string &compute_config, const std::string &memory_config) -> bool;
 
         auto connect_memory_nodes() -> bool;
@@ -21,6 +40,9 @@ namespace DiStore::Cluster {
         auto update(const std::string &key, const std::string &value) -> bool;
         auto remove(const std::string &key) -> bool;
         auto scan(const std::string &key, size_t count) -> std::vector<Value>;
+
+        // for debug
+        auto report_cluster_info() const noexcept -> void;
 
         ComputeNode() = default;
         ComputeNode(const ComputeNode &) = delete;
@@ -35,7 +57,7 @@ namespace DiStore::Cluster {
         std::unique_ptr<RDMADevice> rdma_dev;
 
         auto initialize_erpc() -> bool {
-            auto uri = self_info.erpc_addr.to_string() + ":" + std::to_string(self_info.erpc_port);
+            auto uri = self_info.erpc_addr.to_uri(self_info.erpc_port);
             if (!compute_ctx.initialize_nexus(self_info.erpc_addr, self_info.erpc_port)) {
                 Debug::error("Failed to initialize nexus at compute node %s\n", uri.c_str());
                 return false;

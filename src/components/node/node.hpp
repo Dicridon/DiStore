@@ -35,13 +35,18 @@ namespace DiStore::Cluster {
             return addr;
         }
 
-        auto to_string() const -> std::string {
+        auto to_string() const noexcept
+            -> std::string {
             std::stringstream stream;
             stream << std::to_string(content[0]);
             for (int i = 1; i < 4; i++) {
                 stream << "." << std::to_string(content[i]);
             }
             return stream.str();
+        }
+
+        inline auto to_uri(int port = 0) const noexcept -> std::string {
+            return to_string() + ":" + std::to_string(port);
         }
 
     } __attribute__((packed));
@@ -60,7 +65,7 @@ namespace DiStore::Cluster {
 
         int socket;
 
-        static auto initialize(std::ifstream &config, NodeInfo *node) -> void;
+        static auto initialize(std::ifstream &config, NodeInfo *node) -> bool;
 
         virtual auto dump() const noexcept -> void;
     } __attribute__((packed));

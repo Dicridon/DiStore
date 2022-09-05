@@ -9,8 +9,12 @@ namespace DiStore::Cluster {
             Debug::error("Faild to open config file %s\n", compute_config.c_str());
             return false;
         }
-            
-        NodeInfo::initialize(file, &self_info);
+
+        if (!NodeInfo::initialize(file, &self_info)) {
+            Debug::error("Failed to initailize node\n");
+            return false;
+        }
+
 
         if (!initialize_erpc()) {
             return false;
@@ -26,8 +30,15 @@ namespace DiStore::Cluster {
         }
         remote_memory_allocator.rpc_ctx = &compute_ctx;
 
-        auto self = self_info.tcp_addr.to_string() + std::to_string(self_info.tcp_port);
+        auto self = self_info.tcp_addr.to_uri(self_info.tcp_port);
         Debug::info("Compute node %s is intialized\n", self.c_str());
         return true;
+    }
+
+    // for debug
+    auto ComputeNode::report_cluster_info() const noexcept -> void {
+        Debug::info("Node Reporting cluster info\n");
+        self_info.dump();
+        remote_memory_allocator.dump();
     }
 }

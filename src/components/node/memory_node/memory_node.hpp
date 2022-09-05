@@ -64,7 +64,7 @@ namespace DiStore::Cluster {
         }
 
         auto initialize_erpc() -> bool {
-            auto uri = self_info.erpc_addr.to_string() + ":" + std::to_string(self_info.erpc_port);
+            auto uri = self_info.erpc_addr.to_uri(self_info.erpc_port);
             if (!memory_ctx.initialize_nexus(self_info.erpc_addr, self_info.erpc_port)) {
                 Debug::error("Failed to initialize nexus at %s\n", uri.c_str());
                 return false;
@@ -157,7 +157,7 @@ namespace DiStore::Cluster {
             }
 
             self_info.rdma_ctx = std::move(rdma_ctx);
-            auto uri = self_info.tcp_addr.to_string() + std::to_string(self_info.tcp_port);
+            auto uri = self_info.tcp_addr.to_uri(self_info.tcp_port);
             Debug::info("RDMA is initialized for memory node %s\n", uri.c_str());
             return true;
         }
