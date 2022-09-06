@@ -12,10 +12,12 @@ namespace DiStore::SearchLayer {
     struct SkipListNode {
         std::string anchor;
         RemotePointer data_node;
+        size_t data_size;
         SkipListNode *forwards[];
 
         static auto make_skip_node(int level, const std::string &k, RemotePointer r = nullptr,
-                                   SkipListNode *n = nullptr) -> SkipListNode *
+                                   size_t s = 0, SkipListNode *n = nullptr)
+            -> SkipListNode *
         {
             auto buffer = new byte_t[sizeof(SkipListNode) + level * sizeof(SkipListNode *)];
             auto anchor = new (buffer) std::string;
@@ -27,6 +29,7 @@ namespace DiStore::SearchLayer {
             }
 
             ret->data_node = r;
+            ret->data_size = s;
 
             return ret;
         }
@@ -61,9 +64,14 @@ namespace DiStore::SearchLayer {
             return std::make_unique<SkipList>();
         }
 
-        auto insert(const std::string &anchor, const RemotePointer &r) noexcept -> bool;
-        auto update(const std::string &anchor, const RemotePointer &r) noexcept -> bool;
-        auto search(const std::string &anchor) const noexcept -> RemotePointer;
+        auto insert(const std::string &anchor, const RemotePointer &r, size_t size) noexcept -> bool;
+        auto update(const std::string &anchor, const RemotePointer &r, size_t size) noexcept -> bool;
+        auto search(const std::string &anchor) const noexcept -> std::pair<RemotePointer, size_t>;
+
+        // search whether a member key's anchor key is in the list
+        // 1 -> 10 -> 20 -> ... -> 100, searching for 3 will return 1
+        auto fuzzy_search(const std::string &member) -> std::pair<RemotePointer, size_t>;
+        auto remove(const std::string &anchor) -> bool;
 
         auto dump() const noexcept -> void;
 
