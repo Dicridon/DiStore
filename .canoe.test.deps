@@ -2,5 +2,6 @@
 ./tests/test_remote_memory.cpp: ./src/components/memory/compute_node/compute_node.hpp
 ./tests/test_memory_compute_node.cpp: ./src/components/memory/compute_node/compute_node.hpp
 ./tests/test_node.cpp: ./src/components/node/node.hpp
+./tests/test_tbb.hpp: ./src/components/handover_locktable/handover_locktable.hpp
 ./tests/test_compute_node.cpp: ./src/components/node/compute_node/compute_node.hpp
 ./tests/test_erpc_wrapper.cpp: ./src/components/erpc_wrapper/erpc_wrapper.hpp

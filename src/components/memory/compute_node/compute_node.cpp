@@ -96,7 +96,9 @@ namespace DiStore::Memory {
 
         auto group = thread_info.find(id);
         if (group == thread_info.end()) {
+            mutex.lock();
             thread_info.insert({id, new PageGroup});
+            mutex.unlock();
             group = thread_info.find(id);
             if (refill(id) == false)
                 return nullptr;
@@ -188,7 +190,7 @@ namespace DiStore::Memory {
             if (std::regex_search(buffer, nid_v, nid)) {
                 mem_node->node_id = atoi(nid_v[1].str().c_str());
             }
-            
+
             auto iter = std::sregex_iterator(buffer.begin(), buffer.end(), uri);
             std::smatch match = *iter;
             // can throw exception here
@@ -259,11 +261,11 @@ namespace DiStore::Memory {
         if (p != rdma_ctxs.end())
             return true;
 
-        // TODO: update to struct size
         std::vector<std::unique_ptr<RDMAContext>> rdma;
 
+        auto common_buffer = new byte_t[2048];
         for (const auto &n : memory_nodes) {
-            auto [rdma_ctx, status] = device->open(new byte_t[1024], 1024, 1,
+            auto [rdma_ctx, status] = device->open(common_buffer, 2048, 1,
                                                    RDMADevice::get_default_mr_access(),
                                                    *RDMADevice::get_default_qp_init_attr());
 
@@ -280,8 +282,20 @@ namespace DiStore::Memory {
             Debug::info("RDMA with node %d established\n", n->node_id);
             rdma.push_back(std::move(rdma_ctx));
         }
+
+        std::scoped_lock<std::mutex> _(init_mutex);
         rdma_ctxs.insert({id, std::move(rdma)});
         return true;
+    }
+
+    auto RemoteMemoryManager::get_rdma(RemotePointer remote) -> RDMAContext * {
+        auto rdma = rdma_ctxs.find(std::this_thread::get_id());
+        if (rdma == rdma_ctxs.end()) {
+            Debug::warn("Do remember to setup_rdma_per_thread before running");
+            return nullptr;
+        }
+
+        return rdma->second[remote.get_node()].get();
     }
 
     auto RemoteMemoryManager::get_base_addr(int node_id) -> RemotePointer {
@@ -315,6 +329,8 @@ namespace DiStore::Memory {
 
     auto RemoteMemoryManager::recycle_remote_segment(RemotePointer segment) -> bool {
         // TODO: do the erpc job
+        UNUSED(segment);
+        return false;
     }
 
     // For debug

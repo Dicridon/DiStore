@@ -3,6 +3,7 @@
 #include "memory/memory.hpp"
 #include "memory/remote_memory/remote_memory.hpp"
 #include "city/city.hpp"
+#include "misc/misc.hpp"
 
 namespace DiStore::DataLayer {
     using namespace Memory;
@@ -13,102 +14,127 @@ namespace DiStore::DataLayer {
 
     namespace Enums {
         // DataLayer includes the implementation of adaptive linked array
-        enum LinkedNodeType :uint32_t {
-            Type10,
-            Type12,
-            Type14,
-            Type16,
-            TypeVar, // variable
+        enum LinkedNodeType : uint32_t {
+            Type10 = 10,
+            Type12 = 12,
+            Type14 = 14,
+            Type16 = 16,
+            TypeVar = 99, // variable
+            NotSet = 0,
         };
     }
-    // Layout is important for us to avoid the read-modify-write procedure
 
+    
+    // Layout is important for us to avoid the read-modify-write procedure
     struct KV {
         byte_t key[Constants::KEYLEN];
         byte_t value[Constants::VALLEN];
     };
 
     using namespace Enums;
-    struct LinkedNode10 {
+
+    template <std::size_t M, std::size_t N>
+    struct LinkedNode {
         RemotePointer llink;
         RemotePointer rlink;
         LinkedNodeType type;
 
         // next writtable slot
         uint32_t next;
-        uint8_t fingerprints[10];
-        KV paris[10];
 
-        LinkedNode10()
+        // here we leave extra space for fingerprints so that we do not need to
+        // move data when morphing. Such space cost is marginal
+        uint8_t fingerprints[M];
+        KV pairs[N];
+
+        LinkedNode()
             : llink(nullptr),
               rlink(nullptr),
-              type(LinkedNodeType::Type10),
-              next(24)
+              type(static_cast<LinkedNodeType>(N)),
+              next(0)
         {
             memset(fingerprints, 0, sizeof(fingerprints));
         }
-    };
 
-    struct LinkedNode12 {
-        RemotePointer llink;
-        RemotePointer rlink;
-        LinkedNodeType type;
-
-        // next writtable slot
-        uint32_t next;
-        uint8_t fingerprints[12];
-        KV paris[12];
-
-        LinkedNode12()
-            : llink(nullptr),
-              rlink(nullptr),
-              type(LinkedNodeType::Type12),
-              next(24)
-        {
-            memset(fingerprints, 0, sizeof(fingerprints));
+        auto available() const noexcept -> bool {
+            return next < N;
         }
-    };
 
-    struct LinkedNode14 {
-        RemotePointer llink;
-        RemotePointer rlink;
-        LinkedNodeType type;
+        auto store(const std::string &key, const std::string &value) -> bool {
+            if (!available()) {
+                return false;
+            }
 
-        // next writtable slot
-        uint32_t next;
-        uint8_t fingerprints[14];
-        KV paris[14];
-
-        LinkedNode14()
-            : llink(nullptr),
-              rlink(nullptr),
-              type(LinkedNodeType::Type14),
-              next(24)
-        {
-            memset(fingerprints, 0, sizeof(fingerprints));
+            fingerprints[next] = CityHash64(key.c_str(), key.size());
+            memcpy(pairs[next].key, key.c_str(), key.size());
+            memcpy(pairs[next].value, value.c_str(), value.size());
+            ++next;
+            return true;
         }
-    };
 
-    struct LinkedNode16 {
-        RemotePointer llink;
-        RemotePointer rlink;
-        LinkedNodeType type;
+        auto find(const std::string &key) -> std::optional<std::string> {
+            for (int i = 0; i < next; i++) {
+                // fuck the type conversion
+                if (key.compare(0, Constants::KEYLEN, (char *)&pairs[i].key[0]) == 0) {
+                    return std::string((char *)&pairs[i].value[0], Constants::VALLEN);
+                }
+            }
 
-        // next writtable slot
-        uint32_t next;
-        uint8_t fingerprints[16];
-        KV paris[16];
-
-        LinkedNode16()
-            : llink(nullptr),
-              rlink(nullptr),
-              type(LinkedNodeType::Type16),
-              next(24)
-        {
-            memset(fingerprints, 0, sizeof(fingerprints));
+            return {};
         }
+
+        auto update(const std::string &key, const std::string &value) -> bool {
+            for (int i = 0; i < next; i++) {
+                // fuck the type conversion
+                if (key.compare(0, Constants::KEYLEN, (char *)&pairs[i].key[0]) == 0) {
+                    memcpy(pairs[i].value, value.c_str(), Constants::VALLEN);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        auto store(const_byte_ptr_t key, size_t k_sz, const_byte_ptr_t val, size_t v_sz)
+            -> bool
+        {
+            if (!available()) {
+                return false;
+            }
+
+            fingerprints[next] = CityHash64((char *)key, k_sz);
+            memcpy(pairs[next].key, key, k_sz);
+            memcpy(pairs[next].value, val, v_sz);
+            ++next;
+            return true;
+        }
+
+        // checking number of KVs in this node and change type accordingly
     };
 
+    using LinkedNode10 = LinkedNode<16, 10>;
+    using LinkedNode12 = LinkedNode<16, 12>;
+    using LinkedNode14 = LinkedNode<16, 14>;
+    using LinkedNode16 = LinkedNode<16, 16>;
+    using BufferNode = LinkedNode<21, 21>;
+    
+    inline static auto sizeof_node(Enums::LinkedNodeType t) -> size_t {
+        switch(t) {
+        case LinkedNodeType::Type10:
+            return sizeof(LinkedNode10);
+        case LinkedNodeType::Type12:
+            return sizeof(LinkedNode12);
+        case LinkedNodeType::Type14:
+            return sizeof(LinkedNode14);
+        case LinkedNodeType::Type16:
+            return sizeof(LinkedNode16);
+        default:
+            return 0;
+        }
+    }
+            
+    
+    // not used
     struct LinkedNodeVar {
         RemotePointer llink;
         RemotePointer rlink;
@@ -128,6 +154,8 @@ namespace DiStore::DataLayer {
                                         RemotePointer rlk = nullptr)
             -> LinkedNodeVar *
         {
+            FOR_FUTURE(v);            
+            FOR_FUTURE(v_sz);
             auto self = reinterpret_cast<LinkedNodeVar *>(buf);
             self->llink = llk;
             self->rlink = rlk;

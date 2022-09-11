@@ -9,6 +9,7 @@
             "warning": "-Wunused-parameter -Wunused-variable -Wunused-private-field -Wunused-const-variable",
             "std": "-std=c++17",
             "boost": "-Ithird-party/boost_1_77_0",
+            "tbb": "-Ithird-party/tbb/include",
             "eRPC": "-Ithird-party/eRPC/src",
             "eRPC-third": "-Ithird-party/eRPC/third_party/asio/include",
             "infiniband": "-DERPC_INFINIBAND=true",
@@ -18,6 +19,7 @@
             "rdma": "-libverbs",
             "pmem": "-lpmem",
             "thread": "-lpthread",
+            "tbb": "-Lthird-party/tbb/lib -ltbb",
             "eRPC": "-Lthird-party/eRPC/build -lerpc",
             "numa": "-lnuma",
             "atomic": "-latomic"

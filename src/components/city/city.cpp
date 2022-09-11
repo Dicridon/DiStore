@@ -1,5 +1,3 @@
-#ifndef __DISTORE__CITY__CITY__
-#define __DISTORE__CITY__CITY__
 #include "city.hpp"
 // Copyright (c) 2011 Google, Inc.
 //
@@ -464,7 +462,4 @@ uint128 CityHashCrc128(const char *s, size_t len) {
     return uint128(result[2], result[3]);
   }
 }
-
 #endif
-#endif
-

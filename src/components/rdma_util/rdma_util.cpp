@@ -92,11 +92,11 @@ namespace DiStore::RDMAUtil {
         if (write(sockfd, &tmp, normal) != normal) {
             return Status::WriteError;
         }
-            
+
         if (read(sockfd, &tmp, normal) != normal) {
             return Status::ReadError;
         }
-            
+
         remote.addr = ntohll(tmp.addr);
         remote.rkey = ntohl(tmp.rkey);
         remote.qp_num = ntohl(tmp.qp_num);
@@ -213,6 +213,40 @@ namespace DiStore::RDMAUtil {
         return std::make_pair(Status::Ok, 0);
     }
 
+    auto RDMAContext::generate_sge(const byte_ptr_t msg, size_t msg_len, size_t offset) -> struct ibv_sge {
+        auto addr = fill_buf(msg, msg_len, offset);
+        struct ibv_sge s;
+        s.addr = uint64_t(addr);
+        s.length = msg_len;
+        s.lkey = mr->lkey;
+        return s;
+    }
+
+    auto RDMAContext::post_batch_write(std::vector<struct ibv_sge> sges) -> StatusPair {
+        struct ibv_send_wr *wrs = new struct ibv_send_wr[sges.size() + 1];
+        struct ibv_send_wr *bad_wr;
+
+        size_t i;
+        for (i = 0; i < sges.size(); i++) {
+            memset(wrs + i, 0, sizeof(struct ibv_send_wr));
+            wrs[i].wr_id = i;
+            wrs[i].next = &wrs[i + 1];
+            wrs[i].sg_list = &sges[i];
+            wrs[i].num_sge = 1;
+            wrs[i].opcode = IBV_WR_RDMA_WRITE;
+        }
+
+        wrs[i - 1].next = nullptr;
+        wrs[i - 1].send_flags = IBV_SEND_SIGNALED;
+
+        if (auto ret = ibv_post_send(qp, wrs, &bad_wr); ret != 0) {
+            Debug::error("posting wr %d failed\n", bad_wr->wr_id);
+            return std::make_pair(Status::WriteError, ret);
+        }
+
+        return std::make_pair(Status::Ok, 0);
+    }
+
     auto RDMAContext::poll_completion_once(bool send) noexcept -> int {
         struct ibv_wc wc;
         int ret;
@@ -229,7 +263,7 @@ namespace DiStore::RDMAUtil {
     {
         auto wc = std::make_unique<struct ibv_wc>();
         int ret;
-        auto cq = send ? out_cq : in_cq;            
+        auto cq = send ? out_cq : in_cq;
         do {
             ret = ibv_poll_cq(cq, 1, wc.get());
         } while (ret == 0);
@@ -242,16 +276,18 @@ namespace DiStore::RDMAUtil {
     {
         auto wc = std::make_unique<struct ibv_wc[]>(no);
         int ret;
-        auto cq = send ? out_cq : in_cq;            
+        auto cq = send ? out_cq : in_cq;
         do {
             ret = ibv_poll_cq(cq, no, wc.get());
         } while (ret == 0);
 
         return {std::move(wc), ret};
-    }        
+    }
 
-    auto RDMAContext::fill_buf(uint8_t *msg, size_t msg_len, size_t offset) -> void{
-        memcpy((uint8_t *)buf + offset, msg, msg_len);
+    auto RDMAContext::fill_buf(uint8_t *msg, size_t msg_len, size_t offset) -> byte_ptr_t {
+        if (msg && msg_len != 0)
+            memcpy((uint8_t *)buf + offset, msg, msg_len);
+        return (byte_ptr_t)buf + offset;
     }
 
 
@@ -313,9 +349,10 @@ namespace DiStore::RDMAUtil {
         memset(at.get(), 0, sizeof(struct ibv_qp_init_attr));
 
         at->qp_type = IBV_QPT_RC;
-        at->sq_sig_all = 1;
-        at->cap.max_send_wr = 1;
-        at->cap.max_recv_wr = 1;
+        // post_send_helper will set signals accordingly
+        at->sq_sig_all = 0;
+        at->cap.max_send_wr = Constants::MAX_QP_DEPTH;
+        at->cap.max_recv_wr = Constants::MAX_QP_DEPTH;
         at->cap.max_send_sge = 1;
         at->cap.max_recv_sge = 1;
         return at;

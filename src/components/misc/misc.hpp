@@ -1,6 +1,7 @@
 #ifndef __DISTORE__MISC__MISC__
 #define __DISTORE__MISC__MISC__
 #define UNUSED(x) (void)(x)
+#define FOR_FUTURE(x) (void)(x)
 #include <iostream>
 #include <cstring>
 #include <sys/socket.h>

@@ -35,6 +35,10 @@ namespace DiStore::RDMAUtil {
         uint8_t gid[16]; // mandatory for RoCE
     } __attribute__((packed));
 
+    namespace Constants {
+        static constexpr uint32_t MAX_QP_DEPTH = 8;
+    }
+
     namespace Enums {
         enum class Status {
             Ok,
@@ -82,7 +86,7 @@ namespace DiStore::RDMAUtil {
         auto post_send_helper(const byte_ptr_t &ptr, const uint8_t *msg, size_t msg_len, enum ibv_wr_opcode opcode,
                               size_t local_offset) -> StatusPair;
 
-
+        
         RDMAContext() = default;
         RDMAContext(const RDMAContext &) = delete;
         RDMAContext(RDMAContext &&) = delete;
@@ -129,6 +133,9 @@ namespace DiStore::RDMAUtil {
 
         auto post_recv_to(size_t msg_len, size_t offset = 0) -> StatusPair;
 
+        auto generate_sge(const byte_ptr_t msg, size_t msg_len, size_t offset) -> struct ibv_sge;
+        auto post_batch_write(std::vector<struct ibv_sge> sges) -> StatusPair;
+
         /*
          * A set of poll_completion functions. 
          * poll_completion_once(): just to check if a completion is generated
@@ -139,15 +146,16 @@ namespace DiStore::RDMAUtil {
             -> std::pair<std::unique_ptr<struct ibv_wc>, int>;
         auto poll_multiple_completions(size_t no, bool send = true) noexcept
             -> std::pair<std::unique_ptr<struct ibv_wc[]>, int>;
-            
-        auto fill_buf(uint8_t *msg, size_t msg_len, size_t offset = 0) -> void;
+
+        // return the address of the start of the write location
+        auto fill_buf(uint8_t *msg, size_t msg_len, size_t offset = 0) -> byte_ptr_t;
 
         inline auto get_buf() const noexcept -> const void * {
             return buf;
         }
 
-        inline auto get_char_buf() const noexcept -> const char * {
-            return (char *)buf;
+        inline auto get_byte_buf() const noexcept -> const_byte_ptr_t {
+            return reinterpret_cast<byte_ptr_t>(buf);
         }
     };
 

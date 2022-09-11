@@ -197,10 +197,6 @@ namespace DiStore::Memory {
 
         auto free(RemotePointer ptr) -> void;
 
-        auto refill(const std::thread::id &id) -> bool;
-
-        auto refill_single_page(const std::thread::id &id, AllocationClass ac) -> bool;
-
         auto dump() const noexcept -> void;
 
         inline auto get_class(size_t sz) -> AllocationClass {
@@ -224,6 +220,10 @@ namespace DiStore::Memory {
         SegmentTracker tracker;
         std::unordered_map<std::thread::id, PageGroup *> thread_info;
         std::mutex mutex;
+
+        auto refill(const std::thread::id &id) -> bool;
+
+        auto refill_single_page(const std::thread::id &id, AllocationClass ac) -> bool;
     };
 
 
@@ -234,6 +234,8 @@ namespace DiStore::Memory {
         std::vector<std::unique_ptr<Cluster::MemoryNodeInfo>> memory_nodes;
         std::unordered_map<std::thread::id, std::vector<std::unique_ptr<RDMAContext>>> rdma_ctxs;
         RPCWrapper::ClientRPCContext *rpc_ctx;
+
+        std::mutex init_mutex;
 
         RemoteMemoryManager() = default;
 
@@ -253,10 +255,12 @@ namespace DiStore::Memory {
         // set up per-thread RDMA connection with memory nodes
         auto setup_rdma_per_thread(RDMADevice *device) -> bool;
 
+        auto get_rdma(RemotePointer rem) -> RDMAContext *;
 
-        // The underlying RDMA buffer is directly returned to user to void message copy
+
+        // The underlying RDMA buffer is directly returned to user to avoid message copy
         template<typename T,
-                 typename std::enable_if<std::is_pointer_v<T>>>
+                 typename = typename std::enable_if<std::is_pointer_v<T>>>
         auto fetch_as(const RemotePointer &p, size_t size) -> T {
             auto node_id = p.get_node();
             auto addr = p.get_as<byte_ptr_t>();
@@ -264,6 +268,11 @@ namespace DiStore::Memory {
             auto id = std::this_thread::get_id();
 
             auto ctxs = rdma_ctxs.find(id);
+
+            if (ctxs == rdma_ctxs.end()) {
+                Debug::warn("Do remember to setup_rdma_per_thread before running");
+                return nullptr;
+            }
 
             auto ctx = ctxs->second[node_id].get();
 
@@ -273,8 +282,9 @@ namespace DiStore::Memory {
             return reinterpret_cast<T>(ctx->buf);
         }
 
-        // content should already be prepared in the buffer returned from fetch_as
-        auto write_to(const RemotePointer &p, size_t size) -> bool {
+        // if content == nullptr , then the content should already be prepared in the
+        // buffer returned from fetch_as
+        auto write_to(const RemotePointer &p, size_t size, byte_ptr_t content = nullptr) -> bool {
             auto node_id = p.get_node();
             auto addr = p.get_as<byte_ptr_t>();
 
@@ -284,7 +294,7 @@ namespace DiStore::Memory {
 
             auto ctx = ctxs->second[node_id].get();
 
-            ctx->post_write(addr, nullptr, size);
+            ctx->post_write(addr, content, size);
             auto [wc, _] = ctx->poll_one_completion();
             if (wc)
                 return false;
@@ -297,6 +307,7 @@ namespace DiStore::Memory {
         auto recycle_remote_segment(RemotePointer segment) -> bool;
 
         static auto memory_continuation(void *ctx, void *tag) -> void {
+            UNUSED(tag);
             auto info = reinterpret_cast<RPCWrapper::RPCConnectionInfo *>(ctx);
             info->done = true;
         }
