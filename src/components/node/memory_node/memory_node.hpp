@@ -33,6 +33,16 @@ namespace DiStore::Cluster {
         static auto allocation_handler(erpc::ReqHandle *req_handle, void *ctx) -> void;
         static auto deallocation_handler(erpc::ReqHandle *req_handle, void *ctx) -> void;
 
+        static auto make_memory_node(const std::string &config) -> std::unique_ptr<MemoryNode> {
+            auto ret = std::make_unique<MemoryNode>();
+            if (!ret->initialize(config)) {
+                Debug::error("Failed to initialize a memory node\n");
+                return nullptr;
+            }
+
+            return ret;
+        }
+
         /*
          * config file format is the similar to that in memory/compute_node.hpp
          * #        tcp              roce            erpc
