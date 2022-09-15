@@ -19,7 +19,7 @@
             "rdma": "-libverbs",
             "pmem": "-lpmem",
             "thread": "-lpthread",
-            "tbb": "-Lthird-party/tbb/lib -ltbb",
+            "tbb": "-Lthird-party/tbb/lib -Lthird-party/tbb/lib64 -ltbb",
             "eRPC": "-Lthird-party/eRPC/build -lerpc",
             "numa": "-lnuma",
             "atomic": "-latomic"

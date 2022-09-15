@@ -13,7 +13,8 @@ auto launch_compute(const std::string &config, const std::string &memory_nodes, 
         return;
     }
 
-    sleep(10);
+    while (true)
+        ;
 }
 
 auto launch_memory(const std::string &config) -> void {
@@ -24,11 +25,12 @@ auto launch_memory(const std::string &config) -> void {
         return;
     }
 
+    node->launch_erpc_thread().value().detach();
     node->launch_tcp_thread().value().detach();
     node->launch_rdma_thread().value().detach();
-    node->launch_erpc_thread().value().detach();
 
-    sleep(10);
+    while (true)
+        ;
 }
 
 auto main(int argc, char *argv[]) -> int {

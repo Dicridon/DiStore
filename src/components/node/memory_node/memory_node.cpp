@@ -75,6 +75,7 @@ namespace DiStore::Cluster {
                     close(sock);
                 }
 
+                Debug::info("Waiting for income tcp request\n");
                 sleep(1);
             }
         }, self_info.base_addr, rpc_id);
@@ -102,6 +103,7 @@ namespace DiStore::Cluster {
                     close(sock);
                 }
 
+                Debug::info("Waiting for income rdma request\n");
                 sleep(1);
             }
         }, self_info.rdma_ctx.get());

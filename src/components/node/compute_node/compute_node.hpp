@@ -141,7 +141,7 @@ namespace DiStore::Cluster {
                 return false;
             }
 
-            Debug::info("RDMA %s device initialized with port %d and gidx %d",
+            Debug::info("RDMA %s device initialized with port %d and gidx %d\n",
                         device.c_str(), port, gid);
             rdma_dev = std::move(dev);
             return true;
