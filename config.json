@@ -6,7 +6,7 @@
         "compile": {
             "opt": "-O0",
             "debug": "-g",
-            "warning": "-Wunused-parameter -Wunused-variable -Wunused-private-field -Wunused-const-variable",
+            "warning": "-Wall",
             "std": "-std=c++17",
             "boost": "-Ithird-party/boost_1_77_0",
             "tbb": "-Ithird-party/tbb/include",

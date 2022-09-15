@@ -56,8 +56,8 @@ namespace DiStore::RPCWrapper {
             info->rpc->run_event_loop_once();
         }
 
-        infos.push_back(std::move(info));
-        Debug::info("Connected to remote ", remote_uri.c_str());
+        Debug::info("Connected to remote %s\n", remote_uri.c_str());
+        return true;
     }
 
     // we will not store many infos, thus linear searching is acceptable
