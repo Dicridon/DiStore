@@ -114,7 +114,7 @@ namespace DiStore::Cluster {
 
             config.clear();
             config.seekg(0);
-            Debug::info("Memory node memory intialized with capacity being %ld", cap);
+            Debug::info("Memory node memory intialized with capacity being %ld\n", cap);
             return true;
         }
 
@@ -154,7 +154,7 @@ namespace DiStore::Cluster {
 
             auto [rdma_dev, status] = RDMAUtil::RDMADevice::make_rdma(device, port, gid);
             if (status != RDMAUtil::Enums::Status::Ok) {
-                Debug::error("Failed to create RDMA device due to %s",
+                Debug::error("Failed to create RDMA device due to %s\n",
                              RDMAUtil::decode_rdma_status(status).c_str());
                 return false;
             }
@@ -164,7 +164,7 @@ namespace DiStore::Cluster {
                                                 RDMAUtil::RDMADevice::get_default_mr_access(),
                                                 *RDMAUtil::RDMADevice::get_default_qp_init_attr());
             if (s != RDMAUtil::Enums::Status::Ok) {
-                Debug::error(">> Failed to open RDMA device due to %s",
+                Debug::error(">> Failed to open RDMA device due to %s\n",
                              RDMAUtil::decode_rdma_status(s).c_str());
                 return false;
             }

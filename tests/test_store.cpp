@@ -24,7 +24,7 @@ auto launch_compute(const std::string &config, const std::string &memory_nodes, 
 
         node->put(k, v);
         auto r = node->get(k);
-        std::cout << r << "\n";
+        std::cout << r.value() << "\n";
     }
 
     while (true)

@@ -72,7 +72,7 @@ namespace DiStore::Cluster {
                     Misc::send_all(sock, &base, sizeof(Memory::RemotePointer));
                     Misc::send_all(sock, &rpc_id, sizeof(rpc_id));
 
-                    close(sock);
+                    // keep the sock open, clients will need it
                 }
 
                 Debug::info("Waiting for income tcp request\n");
@@ -100,7 +100,6 @@ namespace DiStore::Cluster {
                 auto sock = Misc::accept_nonblocking(socket);
                 if (sock != -1) {
                     ctx->default_connect(sock);
-                    close(sock);
                 }
 
                 Debug::info("Waiting for income rdma request\n");

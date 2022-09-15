@@ -270,7 +270,7 @@ namespace DiStore::Memory {
             auto ctxs = rdma_ctxs.find(id);
 
             if (ctxs == rdma_ctxs.end()) {
-                Debug::warn("Do remember to setup_rdma_per_thread before running");
+                Debug::warn("Do remember to setup_rdma_per_thread before running\n");
                 return nullptr;
             }
 

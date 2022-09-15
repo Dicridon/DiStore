@@ -220,7 +220,6 @@ namespace DiStore::Memory {
         rpc_ctx = &ctx;
         for (const auto &n : memory_nodes) {
             auto socket = Misc::socket_connect(false, n->tcp_port, n->tcp_addr.to_string().c_str());
-            n->socket = socket;
             auto node = n->tcp_addr.to_uri(n->tcp_port);
             if (socket == -1) {
                 Debug::error("Failed to connect to memory node %s\n", node.c_str());
@@ -243,11 +242,13 @@ namespace DiStore::Memory {
             }
 
             if (!rpc_ctx->connect_remote(n->node_id, n->erpc_addr, n->erpc_port, rpc_id)) {
-                Debug::error("Failed to establish eRPC connection with node %s at %s",
+                Debug::error("Failed to establish eRPC connection with node %s at %s\n",
                              node.c_str(), n->erpc_addr.to_uri(n->erpc_port).c_str());
                 return false;
             }
-            Debug::info("Successfully connected to node %s", node.c_str());
+            Debug::info("Successfully connected to node %s\n", node.c_str());
+
+            close(socket);
             ++successed;
         }
 
@@ -266,18 +267,20 @@ namespace DiStore::Memory {
 
         auto common_buffer = new byte_t[2048];
         for (const auto &n : memory_nodes) {
+            auto socket = Misc::socket_connect(false, n->roce_port, n->roce_addr.to_string().c_str());
             auto [rdma_ctx, status] = device->open(common_buffer, 2048, 1,
                                                    RDMADevice::get_default_mr_access(),
                                                    *RDMADevice::get_default_qp_init_attr());
 
             if (status != RDMAUtil::Enums::Status::Ok) {
-                Debug::error(">> Failed to open device due to %s \n",
+                Debug::error(">> Failed to open device due to %s\n",
                              RDMAUtil::decode_rdma_status(status).c_str());
                 return false;
             }
 
-            if (!rdma_ctx->default_connect(n->socket)) {
+            if (rdma_ctx->default_connect(socket) != 0) {
                 Debug::error("Failed to establish RDMA with node %d\n", n->node_id);
+                return false;
             }
 
             Debug::info("RDMA with node %d established\n", n->node_id);
@@ -292,7 +295,7 @@ namespace DiStore::Memory {
     auto RemoteMemoryManager::get_rdma(RemotePointer remote) -> RDMAContext * {
         auto rdma = rdma_ctxs.find(std::this_thread::get_id());
         if (rdma == rdma_ctxs.end()) {
-            Debug::warn("Do remember to setup_rdma_per_thread before running");
+            Debug::warn("Do remember to setup_rdma_per_thread before running\n");
             return nullptr;
         }
 
