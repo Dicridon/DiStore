@@ -13,6 +13,20 @@ auto launch_compute(const std::string &config, const std::string &memory_nodes, 
         return;
     }
 
+    if (!node->register_thread()) {
+        Debug::error("Failed to register a thread\n");
+        return;
+    }
+
+    for (size_t i = 0; i < 100; i++) {
+        auto k = std::to_string(1000000 + i);
+        auto v = std::to_string(2000000 + i);
+
+        node->put(k, v);
+        auto r = node->get(k);
+        std::cout << r << "\n";
+    }
+
     while (true)
         ;
 }
