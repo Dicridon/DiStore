@@ -33,6 +33,18 @@ namespace DiStore::RDMAUtil {
         uint32_t qp_num; // local queue pair number
         uint16_t lid;    // LID of the ib port
         uint8_t gid[16]; // mandatory for RoCE
+
+        auto dump() -> void {
+            std::cout << "Registered memory: " << addr << "\n";
+            std::cout << "remote key: " << rkey << "\n";
+            std::cout << "qp_num: " << qp_num << "\n";
+            std::cout << "lid: " << lid << "\n";
+            std::cout << "gid: ";
+            for (int i = 0; i < 16; i++) {
+                std::cout << int(gid[i]) << " ";
+            }
+            std::cout << "\n";
+        }
     } __attribute__((packed));
 
     namespace Constants {
