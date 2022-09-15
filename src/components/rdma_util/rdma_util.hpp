@@ -213,10 +213,16 @@ namespace DiStore::RDMAUtil {
         }
 
         // never explicitly instantiated
-        RDMADevice() = default;
+        RDMADevice() :
+            dev_name(""),
+            devices(nullptr),
+            device(nullptr),
+            ctx(nullptr),
+            ib_port(-1),
+            gid_idx(-1) {};
         ~RDMADevice() {
-            ibv_free_device_list(devices);
-            ibv_close_device(ctx);
+            if (devices) ibv_free_device_list(devices);
+            if (ctx) ibv_close_device(ctx);
         }
         RDMADevice(const RDMADevice &) = delete;
         RDMADevice(RDMADevice &&) = delete;

@@ -1,6 +1,7 @@
 ./tests/test_skiplist.cpp: ./src/components/search_layer/search_layer.hpp
 ./tests/test_remote_memory.cpp: ./src/components/memory/compute_node/compute_node.hpp
 ./tests/test_memory_compute_node.cpp: ./src/components/memory/compute_node/compute_node.hpp
+./tests/test_rdma.cpp: ./src/components/rdma_util/rdma_util.hpp ./src/components/cmd_parser/cmd_parser.hpp ./src/components/misc/misc.hpp
 ./tests/test_store.cpp: ./src/components/node/memory_node/memory_node.hpp ./src/components/node/compute_node/compute_node.hpp ./src/components/cmd_parser/cmd_parser.hpp
 ./tests/test_node.cpp: ./src/components/node/node.hpp
 ./tests/test_compute_node.cpp: ./src/components/node/compute_node/compute_node.hpp
