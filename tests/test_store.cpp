@@ -24,14 +24,18 @@ auto launch_memory(const std::string &config) -> void {
         return;
     }
 
+    node->launch_tcp_thread().value().detach();
+    node->launch_rdma_thread().value().detach();
+    node->launch_erpc_thread().value().detach();
+
     sleep(10);
 }
 
 auto main(int argc, char *argv[]) -> int {
     Parser parser;
-    parser.add_option<std::string>("--type", "-t", "compute");
-    parser.add_option<std::string>("--config", "-c");
-    parser.add_option<std::string>("--memory_nodes", "-m");
+    parser.add_option("--type", "-t", "compute");
+    parser.add_option("--config", "-c");
+    parser.add_option("--memory_nodes", "-m");
     parser.add_option<int>("--threads", "-T", 1);
 
     parser.parse(argc, argv);

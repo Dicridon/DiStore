@@ -25,10 +25,9 @@ namespace DiStore::Cluster {
         }
 
         remote_memory_allocator.parse_config_file(memory_config);
-        if (!remote_memory_allocator.connect_memory_nodes()) {
+        if (!remote_memory_allocator.connect_memory_nodes(compute_ctx)) {
             return false;
         }
-        remote_memory_allocator.rpc_ctx = &compute_ctx;
 
         auto self = self_info.tcp_addr.to_uri(self_info.tcp_port);
 

@@ -250,7 +250,7 @@ namespace DiStore::Memory {
         auto parse_config_file(const std::string &config) -> bool;
 
         // connect all memory nodes presented in the config file via socket
-        auto connect_memory_nodes() -> bool;
+        auto connect_memory_nodes(RPCWrapper::ClientRPCContext &compute) -> bool;
 
         // set up per-thread RDMA connection with memory nodes
         auto setup_rdma_per_thread(RDMADevice *device) -> bool;

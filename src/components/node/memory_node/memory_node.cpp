@@ -52,6 +52,7 @@ namespace DiStore::Cluster {
         }
 
         auto uri = self_info.tcp_addr.to_uri(self_info.tcp_port);
+
         Debug::info("Memory node %s is initialized\n", uri.c_str());
         return true;
     }
@@ -67,13 +68,14 @@ namespace DiStore::Cluster {
         std::thread t([socket](Memory::RemotePointer base, int rpc_id) {
             while(true){
                 auto sock = Misc::accept_nonblocking(socket);
-                if (sock == -1) {
-                    sleep(1);
+                if (sock != -1) {
+                    Misc::send_all(sock, &base, sizeof(Memory::RemotePointer));
+                    Misc::send_all(sock, &rpc_id, sizeof(rpc_id));
+
+                    close(sock);
                 }
 
-                Misc::send_all(sock, &base, sizeof(Memory::RemotePointer));
-
-                Misc::send_all(sock, &rpc_id, sizeof(rpc_id));
+                sleep(1);
             }
         }, self_info.base_addr, rpc_id);
 
@@ -95,11 +97,12 @@ namespace DiStore::Cluster {
         std::thread t([socket](RDMAUtil::RDMAContext *ctx) {
             while(true){
                 auto sock = Misc::accept_nonblocking(socket);
-                if (sock == -1) {
-                    sleep(1);
+                if (sock != -1) {
+                    ctx->default_connect(sock);
+                    close(sock);
                 }
 
-                ctx->default_connect(sock);
+                sleep(1);
             }
         }, self_info.rdma_ctx.get());
 

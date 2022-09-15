@@ -214,9 +214,10 @@ namespace DiStore::Memory {
         return true;
     }
 
-    auto RemoteMemoryManager::connect_memory_nodes() -> bool {
+    auto RemoteMemoryManager::connect_memory_nodes(RPCWrapper::ClientRPCContext &ctx) -> bool {
         // memory node and its rdma_ctx have the same indexes
         int successed = 0;
+        rpc_ctx = &ctx;
         for (const auto &n : memory_nodes) {
             auto socket = Misc::socket_connect(false, n->tcp_port, n->tcp_addr.to_string().c_str());
             n->socket = socket;

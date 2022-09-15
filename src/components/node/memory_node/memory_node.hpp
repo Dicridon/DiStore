@@ -53,8 +53,11 @@ namespace DiStore::Cluster {
          * gid_idx: 2
          */
         auto initialize(const std::string &config) -> bool;
-        auto launch_tcp_thread() -> std::optional<std::thread>;
+
+        // should first call launch erpc_thread to initialize erpc info
         auto launch_erpc_thread() -> std::optional<std::thread>;
+        // then can launch_tcp_thread be called to deliver erpc info to the remote
+        auto launch_tcp_thread() -> std::optional<std::thread>;
         auto launch_rdma_thread() -> std::optional<std::thread>;
 
         MemoryNode() = default;
