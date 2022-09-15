@@ -33,7 +33,9 @@ namespace DiStore::Cluster {
         static auto allocation_handler(erpc::ReqHandle *req_handle, void *ctx) -> void;
         static auto deallocation_handler(erpc::ReqHandle *req_handle, void *ctx) -> void;
 
-        static auto make_memory_node(const std::string &config) -> std::unique_ptr<MemoryNode> {
+        static auto make_memory_node(const std::string &config)
+            -> std::unique_ptr<MemoryNode>
+        {
             auto ret = std::make_unique<MemoryNode>();
             if (!ret->initialize(config)) {
                 Debug::error("Failed to initialize a memory node\n");
@@ -70,7 +72,7 @@ namespace DiStore::Cluster {
         Memory::MemoryNodeAllocator *allocator;
         ServerRPCContext memory_ctx;
         MemoryNodeInfo self_info;
-        std::unique_ptr<RDMAUtil::RDMAContext> rdma_ctx;
+
 
         auto initialize_addresses(std::ifstream &config) -> void {
             NodeInfo::initialize(config, &self_info);
@@ -83,8 +85,10 @@ namespace DiStore::Cluster {
                 return false;
             }
 
-            memory_ctx.register_req_func(Enums::RPCOperations::RemoteAllocation, allocation_handler);
-            memory_ctx.register_req_func(Enums::RPCOperations::RemoteDeallocation, deallocation_handler);
+            memory_ctx.register_req_func(Enums::RPCOperations::RemoteAllocation,
+                                         allocation_handler);
+            memory_ctx.register_req_func(Enums::RPCOperations::RemoteDeallocation,
+                                         deallocation_handler);
 
             // memory_ctx will be passed to an eRPC instance upon create_new_rpc
             memory_ctx.user_context = this;
@@ -109,7 +113,8 @@ namespace DiStore::Cluster {
             auto off = Memory::Constants::MEMORY_PAGE_SIZE;
 
             self_info.cap = cap - off;
-            self_info.base_addr = Memory::RemotePointer::make_remote_pointer(self_info.node_id, mem + off);
+            self_info.base_addr = Memory::RemotePointer::make_remote_pointer(self_info.node_id,
+                                                                             mem + off);
             allocator = Memory::MemoryNodeAllocator::make_allocator(mem, cap);
 
             config.clear();
@@ -158,6 +163,7 @@ namespace DiStore::Cluster {
                              RDMAUtil::decode_rdma_status(status).c_str());
                 return false;
             }
+            self_info.rdma_device = std::move(rdma_dev);
 
             auto [rdma_ctx, s] = rdma_dev->open(self_info.base_addr.get_as<void *>(),
                                                 self_info.cap, 1,
@@ -168,8 +174,8 @@ namespace DiStore::Cluster {
                              RDMAUtil::decode_rdma_status(s).c_str());
                 return false;
             }
-
             self_info.rdma_ctx = std::move(rdma_ctx);
+
             auto uri = self_info.tcp_addr.to_uri(self_info.tcp_port);
             Debug::info("RDMA is initialized for memory node %s\n", uri.c_str());
             return true;

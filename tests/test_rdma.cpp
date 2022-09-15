@@ -8,13 +8,13 @@ using namespace CmdParser;
 
 auto main(int argc, char *argv[]) -> int {
     Parser parser;
-    parser.add_option("server", "-s");
+    parser.add_option("--server", "-s");
     parser.add_option<std::string>("--device", "-d", "mlx5_0");
     parser.add_option<int>("--gid", "-g", 0);
     parser.add_option<int>("--port", "-p", 1);
 
     parser.parse(argc, argv);
-    auto server = parser.get_as<std::string>("--is_server");
+    auto server = parser.get_as<std::string>("--server");
     auto device = parser.get_as<std::string>("--device").value();
     auto gid = parser.get_as<int>("--gid").value();
     auto port = parser.get_as<int>("--port").value();

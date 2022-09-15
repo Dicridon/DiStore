@@ -302,6 +302,7 @@ namespace DiStore::RDMAUtil {
         -> std::pair<std::unique_ptr<RDMAContext>, Status>
     {
         auto rdma_ctx = RDMAContext::make_rdma_context();
+        rdma_ctx->ctx = ctx;
         if (!membuf || !cqe) {
             return {nullptr, Status::InvalidArguments};
         }
