@@ -6,7 +6,7 @@
         "compile": {
             "opt": "-O0",
             "debug": "-g",
-            "warning": "-Wall",
+            "warning": "-Wall -Wno-unused-function",
             "std": "-std=c++17",
             "boost": "-Ithird-party/boost_1_77_0",
             "tbb": "-Ithird-party/tbb/include",

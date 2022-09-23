@@ -1,13 +1,5 @@
 #include "search_layer.hpp"
 namespace DiStore::SearchLayer {
-    static auto random_level() -> int {
-        static const int threshold = 0.25 * RAND_MAX;
-        int level = 1;
-        while (random() < threshold)
-            level += 1;
-        return (level < Constants::MAX_LEVEL) ? level : Constants::MAX_LEVEL;
-    }
-
     auto SkipList::insert(const std::string &anchor, const RemotePointer &r, DataLayer::LinkedNodeType t) noexcept -> bool {
         SkipListNode *update[Constants::MAX_LEVEL] = {nullptr};
         auto *walker = head;
