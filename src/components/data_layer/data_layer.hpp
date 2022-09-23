@@ -24,7 +24,7 @@ namespace DiStore::DataLayer {
         };
     }
 
-    
+
     // Layout is important for us to avoid the read-modify-write procedure
     struct KV {
         byte_t key[Constants::KEYLEN];
@@ -54,6 +54,7 @@ namespace DiStore::DataLayer {
               next(0)
         {
             memset(fingerprints, 0, sizeof(fingerprints));
+            // memset(pairs, 0, sizeof(pairs));
         }
 
         auto available() const noexcept -> bool {
@@ -69,13 +70,14 @@ namespace DiStore::DataLayer {
             memcpy(pairs[next].key, key.c_str(), key.size());
             memcpy(pairs[next].value, value.c_str(), value.size());
             ++next;
+
             return true;
         }
 
         auto find(const std::string &key) -> std::optional<std::string> {
             for (int i = 0; i < next; i++) {
                 // fuck the type conversion
-                if (key.compare(0, Constants::KEYLEN, (char *)&pairs[i].key[0]) == 0) {
+                if (key.compare(0, key.size(), (char *)&pairs[i].key[0], key.size()) == 0) {
                     return std::string((char *)&pairs[i].value[0], Constants::VALLEN);
                 }
             }
@@ -86,8 +88,8 @@ namespace DiStore::DataLayer {
         auto update(const std::string &key, const std::string &value) -> bool {
             for (int i = 0; i < next; i++) {
                 // fuck the type conversion
-                if (key.compare(0, Constants::KEYLEN, (char *)&pairs[i].key[0]) == 0) {
-                    memcpy(pairs[i].value, value.c_str(), Constants::VALLEN);
+                if (key.compare(0, key.size(), (char *)&pairs[i].key[0]) == 0) {
+                    memcpy(pairs[i].value, value.c_str(), value.size());
                     return true;
                 }
             }
@@ -117,7 +119,7 @@ namespace DiStore::DataLayer {
     using LinkedNode14 = LinkedNode<16, 14>;
     using LinkedNode16 = LinkedNode<16, 16>;
     using BufferNode = LinkedNode<21, 21>;
-    
+
     inline static auto sizeof_node(Enums::LinkedNodeType t) -> size_t {
         switch(t) {
         case LinkedNodeType::Type10:
@@ -132,8 +134,8 @@ namespace DiStore::DataLayer {
             return 0;
         }
     }
-            
-    
+
+
     // not used
     struct LinkedNodeVar {
         RemotePointer llink;
@@ -154,7 +156,7 @@ namespace DiStore::DataLayer {
                                         RemotePointer rlk = nullptr)
             -> LinkedNodeVar *
         {
-            FOR_FUTURE(v);            
+            FOR_FUTURE(v);
             FOR_FUTURE(v_sz);
             auto self = reinterpret_cast<LinkedNodeVar *>(buf);
             self->llink = llk;

@@ -165,7 +165,7 @@ namespace DiStore::Memory {
         }
 
         auto available(size_t request = 1) -> bool {
-            return current->available_pages >= request;
+            return current != nullptr && current->available_pages >= request;
         }
 
         auto offer_page() -> PageMirror *;
@@ -313,7 +313,6 @@ namespace DiStore::Memory {
         }
 
         auto dump() const noexcept -> void;
-
 
         RemoteMemoryManager(const RemoteMemoryManager &) = delete;
         RemoteMemoryManager(RemoteMemoryManager &&) = delete;

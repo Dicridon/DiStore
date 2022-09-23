@@ -80,7 +80,7 @@ namespace DiStore::Cluster {
     auto ComputeNode::get(const std::string &key) -> std::optional<std::string> {
         if (!remote_put) {
             std::scoped_lock<std::mutex> _(local_mutex);
-            if (key > local_anchors[1]) {
+            if (!local_anchors[1].empty() && key >= local_anchors[1]) {
                 return local_nodes[1]->find(key);
             } else {
                 return local_nodes[0]->find(key);

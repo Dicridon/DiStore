@@ -163,7 +163,6 @@ namespace DiStore::Cluster {
                              RDMAUtil::decode_rdma_status(status).c_str());
                 return false;
             }
-            self_info.rdma_device = std::move(rdma_dev);
 
             auto [rdma_ctx, s] = rdma_dev->open(self_info.base_addr.get_as<void *>(),
                                                 self_info.cap, 1,
@@ -174,6 +173,8 @@ namespace DiStore::Cluster {
                              RDMAUtil::decode_rdma_status(s).c_str());
                 return false;
             }
+
+            self_info.rdma_device = std::move(rdma_dev);
             self_info.rdma_ctx = std::move(rdma_ctx);
 
             auto uri = self_info.tcp_addr.to_uri(self_info.tcp_port);
