@@ -41,12 +41,15 @@ namespace DiStore::Cluster {
         }
 
         initialize_addresses(file);
+
         if (!initialize_erpc()) {
             return false;
         }
+
         if (!initialize_memory(file)) {
             return false;
         }
+
         if (!initialize_rdma(file)) {
             return false;
         }
@@ -85,7 +88,10 @@ namespace DiStore::Cluster {
     }
 
     auto MemoryNode::launch_erpc_thread() -> std::optional<std::thread> {
-        return memory_ctx.loop_thread();
+        auto t = memory_ctx.loop_thread();
+
+        Debug::info("New RPC with id being %d launched\n", memory_ctx.info->self_id);
+        return t;
     }
 
     auto MemoryNode::launch_rdma_thread() -> std::optional<std::thread> {

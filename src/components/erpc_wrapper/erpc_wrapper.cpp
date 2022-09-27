@@ -56,7 +56,7 @@ namespace DiStore::RPCWrapper {
             info->rpc->run_event_loop_once();
         }
 
-        Debug::info("Connected to remote %s\n", remote_uri.c_str());
+        Debug::info("RPC Connected to remote %s with rpc id %d\n", remote_uri.c_str(), rpc_id);
         return true;
     }
 

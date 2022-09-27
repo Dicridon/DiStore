@@ -46,6 +46,8 @@ namespace DiStore::RPCWrapper {
             -> int;
         auto loop(size_t timeout_ms) -> void;
         auto loop_thread() -> std::thread;
+
+    private:
         auto create_new_rpc(size_t buffer_size = 64) -> std::unique_ptr<RPCConnectionInfo> {
             auto rpc_info = std::make_unique<RPCConnectionInfo>();
 
@@ -62,6 +64,16 @@ namespace DiStore::RPCWrapper {
     struct ClientRPCContext : RPCContext {
         std::vector<std::unique_ptr<RPCConnectionInfo>> infos;
 
+        auto connect_remote(int node_id, Cluster::IPV4Addr &remote_ip, int remote_port,
+                            int rpc_id) noexcept
+            -> bool;
+        auto select_info(int node_id, int remote_id, int session) const noexcept
+            -> RPCConnectionInfo *;
+        auto select_first_info(int node_id) const noexcept -> RPCConnectionInfo *;
+        auto selecnt_all_info(int node_id) const noexcept -> std::vector<RPCConnectionInfo *>;
+        // we do not implement send_request for the wrapper because the augument list is too long
+
+    private:
         auto create_new_rpc(int node_id, int rpc_id, size_t buffer_size = 64)
             -> std::unique_ptr<RPCConnectionInfo> &
         {
@@ -80,15 +92,6 @@ namespace DiStore::RPCWrapper {
             infos.push_back(std::move(rpc_info));
             return infos.back();
         }
-
-        auto connect_remote(int node_id, Cluster::IPV4Addr &remote_ip, int remote_port,
-                            int rpc_id) noexcept
-            -> bool;
-        auto select_info(int node_id, int remote_id, int session) const noexcept
-            -> RPCConnectionInfo *;
-        auto select_first_info(int node_id) const noexcept -> RPCConnectionInfo *;
-        auto selecnt_all_info(int node_id) const noexcept -> std::vector<RPCConnectionInfo *>;
-        // we do not implement send_request for the wrapper because the augument list is too long
     };
 }
 #endif

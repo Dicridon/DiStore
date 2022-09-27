@@ -53,10 +53,6 @@ namespace DiStore::RDMAUtil {
         }
 
         Debug::info("Certificate exchanged\n");
-        std::cout << ">> remote:\n";
-        remote.dump();
-        std::cout << ">> local:\n";
-        local.dump();
 
         auto init_attr = RDMADevice::get_default_qp_init_state_attr();
         if (auto [status, err] = modify_qp(*init_attr, RDMADevice::get_default_qp_init_state_attr_mask()); status != Status::Ok) {
