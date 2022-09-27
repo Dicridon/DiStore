@@ -25,12 +25,14 @@ static auto memory_continuation(void *ctx, void *tag) -> void {
 }
 
 
-auto main() -> int {
+auto main(int argc, char *argv[]) -> int {
     Parser parser;
     parser.add_option("--host", "-h");
     parser.add_option<int>("--host_port", "-p", 31851);
     parser.add_option("--self", "-s");
     parser.add_option<int>("--self_port", "-P", 31851);
+
+    parser.parse(argc, argv);
 
     auto host = parser.get_as<std::string>("--host");
     auto self = parser.get_as<std::string>("--self");
@@ -64,6 +66,7 @@ auto main() -> int {
         ctx.initialize_nexus(self_ip, self_port);
         ctx.register_req_func(0, remote_handler);
 
+        ctx.loop(20000);
     }
     return 0;
 }
