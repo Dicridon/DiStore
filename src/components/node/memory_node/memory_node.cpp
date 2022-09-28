@@ -94,6 +94,10 @@ namespace DiStore::Cluster {
     auto MemoryNode::launch_erpc_thread() -> std::optional<std::thread> {
         auto t = memory_ctx.loop_thread();
 
+        // launching the thread takes time
+        while(memory_ctx.info == nullptr)
+            ;
+
         Debug::info("New RPC with id being %d launched\n", memory_ctx.info->self_id);
         return t;
     }
