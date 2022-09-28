@@ -24,16 +24,13 @@ namespace DiStore::RPCWrapper {
     }
 
     auto ServerRPCContext::loop_thread() -> std::thread {
-        info = create_new_rpc();
-        auto info_raw = info.get();
+        return std::thread([this]() {
+            this->info = create_new_rpc();
 
-        std::thread t([info_raw]() {
             while(true) {
-                info_raw->rpc->run_event_loop(200);
+                this->info->rpc->run_event_loop(200);
             }
         });
-
-        return t;
     }
 
     auto ClientRPCContext::connect_remote(int node_id, Cluster::IPV4Addr &remote_ip,

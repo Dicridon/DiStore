@@ -66,7 +66,10 @@ auto main(int argc, char *argv[]) -> int {
         ctx.initialize_nexus(self_ip, self_port);
         ctx.register_req_func(0, remote_handler);
 
-        ctx.loop(20000);
+        // ctx.loop(20000);
+        ctx.loop_thread().detach();
+        while(true)
+            ;
     }
     return 0;
 }

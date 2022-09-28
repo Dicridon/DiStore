@@ -14,6 +14,8 @@ namespace DiStore::Cluster {
 
         memcpy(resp.buf, &rem_buf, sizeof(Memory::RemotePointer));
         rpc_ctx->info->rpc->enqueue_response(req_handle, &resp);
+
+        Debug::info("Remote memory segment offered\n");
     }
 
     auto MemoryNode::deallocation_handler(erpc::ReqHandle *req_handle, void *ctx) -> void {
@@ -31,6 +33,8 @@ namespace DiStore::Cluster {
         bool y = true;
         memcpy(resp.buf, &y, sizeof(y));
         rpc_ctx->info->rpc->enqueue_response(req_handle, &resp);
+
+        Debug::info("Remote memory segment recycled\n");
     }
 
     auto MemoryNode::initialize(const std::string &config) -> bool {
