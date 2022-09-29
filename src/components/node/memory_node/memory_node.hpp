@@ -108,7 +108,7 @@ namespace DiStore::Cluster {
                 return false;
             }
 
-            auto cap = atoi(vmem[1].str().c_str());
+            auto cap = atoll(vmem[1].str().c_str());
             auto mem = new Memory::byte_t[cap];
             auto off = Memory::Constants::MEMORY_PAGE_SIZE;
 

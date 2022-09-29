@@ -158,7 +158,7 @@ namespace DiStore::Cluster {
             auto base = remote_memory_allocator.get_base_addr(new_seg.get_node());
             allocator.apply_for_memory(new_seg, base);
 
-            remote = allocator.allocate(sizeof(LinkedNode16));
+            remote = allocator.allocate(size);
         }
 
         return remote;

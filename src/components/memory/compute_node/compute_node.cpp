@@ -96,12 +96,9 @@ namespace DiStore::Memory {
 
         auto group = thread_info.find(id);
         if (group == thread_info.end()) {
-            mutex.lock();
-            thread_info.insert({id, new PageGroup});
-            mutex.unlock();
-            group = thread_info.find(id);
-            if (refill(id) == false)
+            if (refill(id) == false) {
                 return nullptr;
+            }
         }
 
         auto ac = get_class(sz);
@@ -117,8 +114,9 @@ namespace DiStore::Memory {
                 return nullptr;
             break;
         default:
-            break;
+            return nullptr;
         }
+
         return group->second->allocate(ac);
     }
 
@@ -145,6 +143,13 @@ namespace DiStore::Memory {
         }
 
         auto group = thread_info.find(id);
+
+        if (group == thread_info.end()) {
+            mutex.lock();
+            thread_info.insert({id, new PageGroup});
+            mutex.unlock();
+            group = thread_info.find(id);
+        }
 
         group->second = tracker.offer_page_group();
         return true;

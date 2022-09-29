@@ -19,7 +19,7 @@ namespace DiStore {
             static constexpr uint64_t REMOTE_POINTER_MASK = ~0xffff000000000000UL;
             static constexpr uint64_t REMOTE_POINTER_BITS_MASK = 0xc000000000000000UL;
             static constexpr uint64_t REMOTE_POINTER_BITS = 0x2UL;
-#ifndef DEBUG
+#ifndef __DEBUG__
             static constexpr size_t SEGMENT_SIZE = 1 << 30UL;
             static constexpr size_t PAGEGROUP_NO = 8;
             static constexpr size_t MEMORY_PAGE_SIZE = 4096;
@@ -50,7 +50,7 @@ namespace DiStore {
             auto find_empty() -> std::optional<size_t> {
                 for (size_t i = 0; i < bytes; i++) {
                     for (int j = 0; j < 8; j++) {
-                        if (map[i] & Constants::byte_masks[j]) {
+                        if ((map[i] & Constants::byte_masks[j]) == 0) {
                             return i * 8 + j;
                         }
                     }
@@ -62,7 +62,7 @@ namespace DiStore {
             auto get_empty() -> std::optional<size_t> {
                 for (size_t i = 0; i < bytes; i++) {
                     for (int j = 0; j < 8; j++) {
-                        if (map[i] & Constants::byte_masks[j]) {
+                        if ((map[i] & Constants::byte_masks[j]) == 0) {
                             map[i] = map[i] | Constants::byte_masks[j];
                             return i * 8 + j;
                         }

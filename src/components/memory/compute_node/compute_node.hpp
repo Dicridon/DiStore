@@ -114,6 +114,12 @@ namespace DiStore::Memory {
         // this field can be calculated, but explicited stored for simplicity
         RemotePointer page_base;
 
+        PageMirror() {
+            desc.clear();
+            page_id = 0;
+            page_base = nullptr;
+        }
+
         // allocate always succeeds because caller will guarantee page validity
         auto allocate() -> RemotePointer;
         auto available() -> bool;
@@ -122,6 +128,10 @@ namespace DiStore::Memory {
 
     struct PageGroup {
         PageMirror *pages[Constants::PAGEGROUP_NO];
+
+        PageGroup() {
+            memset(pages, 0, sizeof(pages));
+        }
 
         // caller will use available() to ensure page group offers sufficient memory
         auto allocate(AllocationClass ac) -> RemotePointer;

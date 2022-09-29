@@ -68,6 +68,7 @@ auto main(int argc, char *argv[]) -> int {
 
         // ctx.loop(20000);
         ctx.loop_thread().detach();
+        sleep(1);
         while(true)
             ;
     }

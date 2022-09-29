@@ -88,7 +88,7 @@ namespace DiStore::Memory {
         }
 
         inline auto is_nullptr() const noexcept -> bool {
-            return ptr == nullptr;
+            return (byte_ptr_t)((uint64_t)ptr & 0x0000ffffffffffffUL) == nullptr;
         }
 
         inline auto offset(size_t off) -> RemotePointer & {
@@ -162,11 +162,11 @@ namespace DiStore::Memory {
         }
 
         inline auto operator==(std::nullptr_t nu) -> bool {
-            return ptr.local == nu;
+            return ptr.remote.is_nullptr();
         }
 
         inline auto operator!=(std::nullptr_t nu) -> bool {
-            return ptr.local != nu;
+            return !ptr.remote.is_nullptr();
         }
 
         template<typename T, typename = std::enable_if_t<std::is_pointer_v<T>>>
@@ -191,7 +191,7 @@ namespace DiStore::Memory {
         }
 
         inline auto is_nullptr() const noexcept -> bool {
-            return ptr.local == nullptr;
+            return ptr.remote.is_nullptr();
         }
 
         inline auto raw_ptr() const noexcept -> byte_ptr_t {
