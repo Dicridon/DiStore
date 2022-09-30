@@ -538,7 +538,7 @@ namespace DiStore::Cluster {
 
         auto remote = allocate(sizeof(LinkedNode16));
         if (!remote_memory_allocator.write_to(remote, sizeof(LinkedNode16))) {
-            Debug::error("Failed to write back to remote\n");
+            Debug::error("Failed to write back to remote after eager morphing\n");
             return false;
         }
 

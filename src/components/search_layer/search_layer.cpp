@@ -77,7 +77,7 @@ namespace DiStore::SearchLayer {
             }
         }
 
-        if (walker->forwareds[0] && walker->forwards[0]->anchor == member) {
+        if (walker->forwards[0] && walker->forwards[0]->anchor == member) {
             return walker->forwards[0];
         }
 
