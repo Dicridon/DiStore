@@ -251,13 +251,9 @@ namespace DiStore::RDMAUtil {
 
     auto RDMAContext::poll_completion_once(bool send) noexcept -> int {
         struct ibv_wc wc;
-        int ret;
         auto cq = send ? out_cq : in_cq;
-        do {
-            ret = ibv_poll_cq(cq, 1, &wc);
-        } while (ret == 0);
 
-        return ret;
+        return ibv_poll_cq(cq, 1, &wc);
     }
 
     auto RDMAContext::poll_one_completion(bool send) noexcept
@@ -269,6 +265,9 @@ namespace DiStore::RDMAUtil {
         do {
             ret = ibv_poll_cq(cq, 1, wc.get());
         } while (ret == 0);
+
+        if (ret > 0)
+            return {nullptr, ret};
 
         return {std::move(wc), ret};
     }
@@ -283,10 +282,15 @@ namespace DiStore::RDMAUtil {
             ret = ibv_poll_cq(cq, no, wc.get());
         } while (ret == 0);
 
+        if (ret > 0)
+            return {nullptr, ret};
+
         return {std::move(wc), ret};
     }
 
-    auto RDMAContext::fill_buf(uint8_t *msg, size_t msg_len, size_t offset) -> byte_ptr_t {
+    auto RDMAContext::fill_buf(uint8_t *msg, size_t msg_len, size_t offset)
+        -> byte_ptr_t
+    {
         if (msg && msg_len != 0)
             memcpy((uint8_t *)buf + offset, msg, msg_len);
         return (byte_ptr_t)buf + offset;
@@ -347,7 +351,9 @@ namespace DiStore::RDMAUtil {
         return {std::move(rdma_ctx), Status::Ok};
     }
 
-    auto RDMADevice::get_default_qp_init_attr() -> std::unique_ptr<struct ibv_qp_init_attr> {
+    auto RDMADevice::get_default_qp_init_attr()
+        -> std::unique_ptr<struct ibv_qp_init_attr>
+    {
         auto at = std::make_unique<ibv_qp_init_attr>();
         memset(at.get(), 0, sizeof(struct ibv_qp_init_attr));
 
@@ -409,7 +415,9 @@ namespace DiStore::RDMAUtil {
         return attr;
     }
 
-    auto RDMADevice::get_default_qp_rts_attr() -> std::unique_ptr<struct ibv_qp_attr> {
+    auto RDMADevice::get_default_qp_rts_attr()
+        -> std::unique_ptr<struct ibv_qp_attr>
+    {
         auto attr = std::make_unique<struct ibv_qp_attr>();
         memset(attr.get(), 0, sizeof(struct ibv_qp_attr));
 
