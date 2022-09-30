@@ -99,6 +99,8 @@ namespace DiStore::Memory {
             if (refill(id) == false) {
                 return nullptr;
             }
+
+            group = thread_info.find(id);
         }
 
         auto ac = get_class(sz);
@@ -145,9 +147,7 @@ namespace DiStore::Memory {
         auto group = thread_info.find(id);
 
         if (group == thread_info.end()) {
-            mutex.lock();
             thread_info.insert({id, new PageGroup});
-            mutex.unlock();
             group = thread_info.find(id);
         }
 
