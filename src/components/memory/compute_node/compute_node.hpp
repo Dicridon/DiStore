@@ -210,14 +210,19 @@ namespace DiStore::Memory {
         auto dump() const noexcept -> void;
 
         inline auto get_class(size_t sz) -> AllocationClass {
+            if (sz == 0 || sz > 4096)
+                throw std::invalid_argument("Allocation size is invalid: " + std::to_string(sz));
+
             static AllocationClass table[] = {
-                ChunkUnknown, Chunk16, Chunk32, Chunk64,
+                Chunk16, Chunk32, Chunk64,
                 Chunk128, Chunk256, Chunk512, Chunk1024,
                 Chunk2048, Chunk4096};
 
-            auto ac = (sz - 1) / 16 + 1;
-            auto acc = 64 - __builtin_clzll(ac);
-            return table[acc];
+            auto times = (sz - 1) / 16 + 1;
+            auto ct = 63 - __builtin_clzll(times);
+            auto exp = ct + (times > (1UL << ct));
+
+            return table[exp];
         }
 
 

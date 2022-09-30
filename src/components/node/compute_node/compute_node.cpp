@@ -182,6 +182,9 @@ namespace DiStore::Cluster {
         if (to_target->store(key, value))
             return true;
 
+        smaller = allocate(sizeof(LinkedNode10));
+        larger = allocate(sizeof(LinkedNode12));
+
         // time to flush to remote
         if (to_target == local_nodes[0]) {
             remote.llink = nullptr;
@@ -196,9 +199,6 @@ namespace DiStore::Cluster {
             no_move->llink = nullptr;
             no_move->rlink = larger;
         }
-
-        smaller = allocate(sizeof(LinkedNode10));
-        larger = allocate(sizeof(LinkedNode12));
 
         memcpy(remote.fingerprints, to_target->fingerprints, sizeof(to_target->fingerprints));
         memcpy(remote.pairs, to_target->pairs, sizeof(to_target->pairs));
@@ -483,7 +483,7 @@ namespace DiStore::Cluster {
 
             if (r.is_nullptr())
                 ret =  false;
-            else 
+            else
                 // update_queue.push({ranchor, right->type, r});
                 async_update(data_node, ranchor, right->type, r);
         }
@@ -658,7 +658,7 @@ namespace DiStore::Cluster {
 
         update_queue.push(req);
     }
-    
+
 
     // for debug
     auto ComputeNode::report_cluster_info() const noexcept -> void {

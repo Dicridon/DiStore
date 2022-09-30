@@ -17,10 +17,10 @@ namespace DiStore::SearchLayer {
             for (auto i = current_level; i < level; i++) {
                 update[i] = head;
             }
-         
+
             current_level = level;
         }
-        
+
 
         for (int i = 0; i < level; i++) {
             new_node->forwards[i] = update[i]->forwards[i];
@@ -53,7 +53,7 @@ namespace DiStore::SearchLayer {
     auto SkipList::calibrate(SkipListNode *node, int level) -> void {
         SkipListNode *update[Constants::MAX_LEVEL] = {nullptr};
         auto *walker = head;
-        
+
         for (int i = current_level - 1; i >= 1; i--) {
             while (walker->forwards[i] && walker->forwards[i]->anchor < node->anchor) {
                 walker = walker->forwards[i];
@@ -77,12 +77,14 @@ namespace DiStore::SearchLayer {
             }
         }
 
-        if (walker->forwards[0]->anchor == member) {
+        if (walker->forwareds[0] && walker->forwards[0]->anchor == member) {
             return walker->forwards[0];
         }
 
-        if (walker->forwards[0]->anchor > member && walker->anchor <= member)
+        if (walker->forwards[0] == nullptr ||
+            (walker->forwards[0]->anchor > member && walker->anchor <= member))
             return walker;
+
         return nullptr;
     }
 
