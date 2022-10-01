@@ -177,7 +177,7 @@ namespace DiStore::Cluster {
                 // the only winner should remember to collect pending requests
                 // first process winner's own request
                 auto buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
-                                                                               sizeof(LinkedNode10));
+                                                                           sizeof(NodeType));
 
                 shared_ctx->user_context = buffer;
                 shared_ctx->max_depth = -1;
@@ -209,9 +209,11 @@ namespace DiStore::Cluster {
                 }
 
                 if (shared_ctx->requests.unsafe_size() == 0) {
-                    if(remote_memory_allocator.write_to(data_node->data_node, sizeof(LinkedNode10))) {
-                        Debug::error("Failed to write back to remote\n");
+                    if(remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType))) {
                         return {true, 0};
+                    } else {
+                        Debug::error("Failed to write back to remote\n");
+                        return {false, 0};
                     }
                 }
                 return {true, shared_ctx->requests.unsafe_size()};
@@ -248,8 +250,8 @@ namespace DiStore::Cluster {
         auto failed_write(Concurrency::ConcurrencyContext *cctx, const std::string &key,
                           const std::string &value) -> bool;
 
-        auto eager_morph(Concurrency::ConcurrencyContext *shared_ctx, const std::string &key,
-                         const std::string &value, bool done) -> bool;
+        auto eager_morph(SkipListNode *data_node, Concurrency::ConcurrencyContext *shared_ctx,
+                         const std::string &key, const std::string &value, bool done) -> bool;
 
         template<typename NodeType>
         auto construct_reorder_map(NodeType *source_buffer, int left_cap,
@@ -280,6 +282,7 @@ namespace DiStore::Cluster {
             }
         }
 
+        // the splitted node is still large enough to hold the remaining pairs
         auto inplace_split_node(LinkedNode16 *source_buffer, size_t left_cap)
             -> std::tuple<LinkedNode16 *, LinkedNode16 *, std::string>;
 

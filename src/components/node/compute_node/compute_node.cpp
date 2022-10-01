@@ -319,6 +319,8 @@ namespace DiStore::Cluster {
                 Debug::error("Failed to put morphed node to remote\n");
                 ret = false;
             }
+
+            data_node->data_node = remote;
         }
 
         // leave
@@ -332,7 +334,6 @@ namespace DiStore::Cluster {
         return ret;
     }
 
-    // TODO: 2022.9.10, finish all these three methods and finish search
     // 12 + 5 -> 10 + 10
     auto ComputeNode::put12(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool {
         bool ret = true;
@@ -354,7 +355,7 @@ namespace DiStore::Cluster {
             // eager morphing to a Node16
             LinkedNode16 *real = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
             if (pendings <= 4) {
-                return eager_morph(shared_ctx, key, value, done);
+                ret = eager_morph(data_node, shared_ctx, key, value, done);
             } else {
                 // 17 pairs in total, should split
                 Concurrency::ConcurrencyRequests *req = nullptr;
@@ -412,7 +413,7 @@ namespace DiStore::Cluster {
             // eager morphing to a Node16
             LinkedNode16 *real = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
             if (pendings <= 2) {
-                return eager_morph(shared_ctx, key, value, done);
+                ret = eager_morph(data_node, shared_ctx, key, value, done);
             } else {
                 auto [left, right, ranchor] = out_of_place_split_node(real, shared_ctx, 8, key, value, done);
 
@@ -517,7 +518,8 @@ namespace DiStore::Cluster {
         return true;
     }
 
-    auto ComputeNode::eager_morph(Concurrency::ConcurrencyContext *shared_ctx,
+    auto ComputeNode::eager_morph(SkipListNode *data_node,
+                                  Concurrency::ConcurrencyContext *shared_ctx,
                                   const std::string &key, const std::string &value,
                                   bool done)
         -> bool
@@ -541,6 +543,9 @@ namespace DiStore::Cluster {
             Debug::error("Failed to write back to remote after eager morphing\n");
             return false;
         }
+
+        data_node->data_node = remote;
+        data_node->type = LinkedNodeType::Type16;
 
         return true;
     }
