@@ -258,12 +258,13 @@ namespace DiStore::Cluster {
                                    int *reorder_map, bool *picked) -> void
         {
             auto total_records = source_buffer->next;
-            int result = 0;
+            // int result = 0;
             // pick one more key as right's anchor key
+            int target = 0;
             for (int i = 0; i < left_cap + 1; i++) {
-                for (int s = 0; s < total_records; s++) {
-                    if (!picked[s]) {
-                        reorder_map[i] = s;
+                for (int j = 0; j < total_records; j++) {
+                    if (!picked[j]) {
+                        target = j;
                         break;
                     }
                 }
@@ -271,14 +272,15 @@ namespace DiStore::Cluster {
                 for (int j = 0; j < total_records; j++) {
                     if (picked[j])
                         continue;
-                    result = memcmp(&source_buffer->pairs[j].key,
-                                    source_buffer->pairs[reorder_map[i]].key,
-                                    DataLayer::Constants::KEYLEN);
-                    if (result < 0) {
-                        reorder_map[i] = j;
-                        picked[j] = true;
+
+                    if (memcmp(source_buffer->pairs[target].key, source_buffer->pairs[j].key,
+                               DataLayer::Constants::KEYLEN) > 0) {
+                        target = j;
                     }
                 }
+
+                picked[target] = true;
+                reorder_map[i] = target;
             }
         }
 

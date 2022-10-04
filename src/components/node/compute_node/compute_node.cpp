@@ -450,7 +450,7 @@ namespace DiStore::Cluster {
             return failed_write(shared_ctx, key, value);
         }
 
-        auto [done, pendings] = try_put_to_existing_node<LinkedNode14>(shared_ctx, data_node, key, value);
+        auto [done, pendings] = try_put_to_existing_node<LinkedNode16>(shared_ctx, data_node, key, value);
         if (pendings == 0) {
             ret = true;
         } else {
