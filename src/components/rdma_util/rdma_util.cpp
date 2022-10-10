@@ -247,8 +247,58 @@ namespace DiStore::RDMAUtil {
             return std::make_pair(Status::WriteError, ret);
         }
 
-        delete [] wrs;
-        return std::make_pair(Status::Ok, 0);
+        if (auto [wc, ret] = poll_one_completion(); wc == nullptr)
+            return std::make_pair(Status::Ok, 0);
+        else
+            return std::make_pair(Status::WriteError, ret);
+    }
+
+    auto RDMAContext::post_batch_write_test() -> void {
+        struct ibv_send_wr wrs[2];
+        struct ibv_sge sges[2];
+
+        auto ptr = (uint64_t *)buf;
+        ptr[0] = 0x12344321UL;
+        ptr[1] = 0xabcddcbaUL;
+
+        sges[0].addr = (uint64_t)buf;
+        sges[0].length = 8;
+        sges[0].lkey = mr->lkey;
+        wrs[0].wr_id = 0;
+        wrs[0].next = wrs + 1;
+        wrs[0].sg_list = &sges[0];
+        wrs[0].num_sge = 1;
+        wrs[0].opcode = IBV_WR_RDMA_WRITE;
+        wrs[0].send_flags = 0;
+
+        sges[1].addr = (uint64_t)((uint64_t *)buf + 1);
+        sges[1].length = 8;
+        sges[1].lkey = mr->lkey;
+        wrs[1].wr_id = 1;
+        wrs[1].next = nullptr;
+        wrs[1].sg_list = &sges[1];
+        wrs[1].num_sge = 1;
+        wrs[1].opcode = IBV_WR_RDMA_WRITE;
+        wrs[1].send_flags = IBV_SEND_SIGNALED;
+
+        struct ibv_send_wr *bad_wr;
+
+        if (auto ret = ibv_post_send(qp, wrs, &bad_wr); ret != 0) {
+            Debug::error("posting wr %d failed\n", bad_wr->wr_id);
+            return;
+        }
+
+        auto [wc, ret] = poll_one_completion();
+
+        post_read(8);
+        poll_one_completion();
+        auto n = *(uint64_t *)buf;
+        std::cout << n << "\n";
+
+        post_read(8, 0, 8);
+        poll_one_completion();
+        n = *(uint64_t *)buf;
+        std::cout << n << "\n";
     }
 
     auto RDMAContext::poll_completion_once(bool send) noexcept -> int {

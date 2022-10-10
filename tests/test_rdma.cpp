@@ -30,26 +30,26 @@ auto main(int argc, char *argv[]) -> int {
         auto socket = Misc::socket_connect(false, 2333, server.value().c_str());
         ctx->default_connect(socket);
 
-        auto number = 0xabcddcbaUL;
-        auto ptr = (uint64_t *)buffer;
-        ptr[0] = number;
-        ptr[1] = 0x12344321UL;
-
-        auto sge1 = ctx->generate_sge(nullptr, sizeof(number), 0);
-        auto sge2 = ctx->generate_sge(nullptr, sizeof(number), sizeof(number));
-
+        // auto number = 0xabcddcbaUL;
+        // auto ptr = (uint64_t *)buffer;
+        // ptr[0] = number;
+        // ptr[1] = 0x12344321UL;
+        // 
+        // auto sge1 = ctx->generate_sge(nullptr, sizeof(number), 0);
+        // auto sge2 = ctx->generate_sge(nullptr, sizeof(number), sizeof(number));
+        // 
         // ctx->post_write((uint8_t *)&number, sizeof(number));
-        ctx->post_batch_write({sge1, sge2});
-        ctx->poll_completion_once();
-
-        ctx->post_read(sizeof(number));
-        auto n = *(uint64_t *)ctx->get_buf();
-        std::cout << "read " << n << "\n";
-
-        ctx->post_read(sizeof(number), 0, sizeof(number));
-        n = *(uint64_t *)ctx->get_buf();
-        std::cout << "read " << n << "\n";
-        
+        // ctx->post_batch_write({sge1, sge2});
+        // ctx->poll_completion_once();
+        // 
+        // ctx->post_read(sizeof(number));
+        // auto n = *(uint64_t *)ctx->get_buf();
+        // std::cout << "read " << n << "\n";
+        // 
+        // ctx->post_read(sizeof(number), 0, sizeof(number));
+        // n = *(uint64_t *)ctx->get_buf();
+        // std::cout << "read " << n << "\n";
+        ctx->post_batch_write_test();
     } else {
         auto ctx = dev->open(buffer, 1024, 1, RDMADevice::get_default_mr_access(),
                              *RDMADevice::get_default_qp_init_attr()).first;
