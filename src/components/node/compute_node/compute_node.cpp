@@ -625,6 +625,8 @@ namespace DiStore::Cluster {
         construct_reorder_map(source_buffer, left_cap, reorder_map, picked);
         auto right_anchor = std::string((char *)source_buffer->pairs[reorder_map[left_cap]].key,
                                         DataLayer::Constants::KEYLEN);
+        // left node should not take the anchor key of right node
+        picked[left_cap] = false;
 
         auto left = source_buffer;
         auto right = source_buffer + 1;

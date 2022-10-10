@@ -306,8 +306,8 @@ namespace DiStore::Cluster {
 
             if (l.get_node() == r.get_node()) {
                 auto rdma = remote_memory_allocator.get_rdma(l);
-                auto l_sge = rdma->generate_sge(nullptr, 0, 0);
-                auto r_sge = rdma->generate_sge(nullptr, 0, sizeof(LinkedNode16));
+                auto l_sge = rdma->generate_sge(nullptr, sizeof(LinkedNode16), 0);
+                auto r_sge = rdma->generate_sge(nullptr, sizeof(LinkedNode16), sizeof(LinkedNode16));
 
                 rdma->post_batch_write({l_sge, r_sge});
                 if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
@@ -318,7 +318,6 @@ namespace DiStore::Cluster {
 
             data_node->data_node = l;
 
-            // TODO: add right and its anchor to update thread
             return r;
         }
 

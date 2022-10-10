@@ -224,6 +224,7 @@ namespace DiStore::RDMAUtil {
         return s;
     }
 
+    // TODO:  incorrect implementation, 2022.10.5
     auto RDMAContext::post_batch_write(std::vector<struct ibv_sge> sges) -> StatusPair {
         struct ibv_send_wr *wrs = new struct ibv_send_wr[sges.size() + 1];
         struct ibv_send_wr *bad_wr;
@@ -246,6 +247,7 @@ namespace DiStore::RDMAUtil {
             return std::make_pair(Status::WriteError, ret);
         }
 
+        delete [] wrs;
         return std::make_pair(Status::Ok, 0);
     }
 
