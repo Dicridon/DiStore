@@ -145,8 +145,17 @@ namespace DiStore::RDMAUtil {
 
         auto post_recv_to(size_t msg_len, size_t offset = 0) -> StatusPair;
 
-        auto generate_sge(const byte_ptr_t msg, size_t msg_len, size_t offset) -> struct ibv_sge;
-        auto post_batch_write(std::vector<struct ibv_sge> sges) -> StatusPair;
+        auto generate_sge(const byte_ptr_t msg, size_t msg_len, size_t offset) -> std::unique_ptr<struct ibv_sge>;
+
+        /*
+         * Generate a send wr, with send_flag being IBV_SEND_SIGNALED and next being nullptr
+         */ 
+        auto generate_send_wr(int wr_id, struct ibv_sge *sge, int num_sge, const byte_ptr_t remote,
+                              struct ibv_send_wr *next = nullptr,
+                              enum ibv_wr_opcode opcode = IBV_WR_RDMA_WRITE)
+            -> std::unique_ptr<struct ibv_send_wr>;
+
+        auto post_batch_write(struct ibv_send_wr *wrs) -> StatusPair;
         auto post_batch_write_test() -> void;
 
         /*

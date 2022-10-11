@@ -215,42 +215,44 @@ namespace DiStore::RDMAUtil {
         return std::make_pair(Status::Ok, 0);
     }
 
-    auto RDMAContext::generate_sge(const byte_ptr_t msg, size_t msg_len, size_t offset) -> struct ibv_sge {
+    auto RDMAContext::generate_sge(const byte_ptr_t msg, size_t msg_len, size_t offset)
+        -> std::unique_ptr<struct ibv_sge>
+    {
         auto addr = fill_buf(msg, msg_len, offset);
-        struct ibv_sge s;
-        s.addr = uint64_t(addr);
-        s.length = msg_len;
-        s.lkey = mr->lkey;
+        auto s = std::make_unique<struct ibv_sge>();
+        s->addr = uint64_t(addr);
+        s->length = msg_len;
+        s->lkey = mr->lkey;
         return s;
     }
 
-    // TODO:  incorrect implementation, 2022.10.5
-    auto RDMAContext::post_batch_write(std::vector<struct ibv_sge> sges) -> StatusPair {
-        struct ibv_send_wr *wrs = new struct ibv_send_wr[sges.size() + 1];
+    auto RDMAContext::generate_send_wr(int wr_id, struct ibv_sge *sge, int num_sge, const byte_ptr_t remote,
+                                       struct ibv_send_wr *next, enum ibv_wr_opcode opcode)
+        -> std::unique_ptr<struct ibv_send_wr>
+    {
+        auto wr = std::make_unique<struct ibv_send_wr>();
+
+        wr->wr_id = wr_id;
+        wr->next = next;
+        wr->sg_list = sge;
+        wr->num_sge = num_sge;
+        wr->opcode = opcode;
+        wr->send_flags = IBV_SEND_SIGNALED;
+        wr->wr.rdma.remote_addr = (uint64_t)remote;
+        wr->wr.rdma.rkey = this->remote.rkey;
+
+        return wr;
+    }
+
+    auto RDMAContext::post_batch_write(struct ibv_send_wr *wrs) -> StatusPair {
         struct ibv_send_wr *bad_wr;
 
-        size_t i;
-        for (i = 0; i < sges.size(); i++) {
-            memset(wrs + i, 0, sizeof(struct ibv_send_wr));
-            wrs[i].wr_id = i;
-            wrs[i].next = &wrs[i + 1];
-            wrs[i].sg_list = &sges[i];
-            wrs[i].num_sge = 1;
-            wrs[i].opcode = IBV_WR_RDMA_WRITE;
-        }
-
-        wrs[i - 1].next = nullptr;
-        wrs[i - 1].send_flags = IBV_SEND_SIGNALED;
-
         if (auto ret = ibv_post_send(qp, wrs, &bad_wr); ret != 0) {
-            Debug::error("posting wr %d failed\n", bad_wr->wr_id);
-            return std::make_pair(Status::WriteError, ret);
+            Debug::error("posting wr %d failed, error code: %d\n", bad_wr->wr_id, ret);
+            return std::make_pair(Enums::Status::WriteError, ret);
         }
 
-        if (auto [wc, ret] = poll_one_completion(); wc == nullptr)
-            return std::make_pair(Status::Ok, 0);
-        else
-            return std::make_pair(Status::WriteError, ret);
+        return std::make_pair(Enums::Status::Ok, 0);
     }
 
     auto RDMAContext::post_batch_write_test() -> void {
@@ -261,25 +263,13 @@ namespace DiStore::RDMAUtil {
         ptr[0] = 0x12344321UL;
         ptr[1] = 0xabcddcbaUL;
 
-        sges[0].addr = (uint64_t)buf;
-        sges[0].length = 8;
-        sges[0].lkey = mr->lkey;
-        wrs[0].wr_id = 0;
-        wrs[0].next = wrs + 1;
-        wrs[0].sg_list = &sges[0];
-        wrs[0].num_sge = 1;
-        wrs[0].opcode = IBV_WR_RDMA_WRITE;
-        wrs[0].send_flags = 0;
+        auto sge1 = generate_sge(nullptr, sizeof(uint64_t), 0);
+        auto sge2 = generate_sge(nullptr, sizeof(uint64_t), sizeof(uint64_t));
 
-        sges[1].addr = (uint64_t)((uint64_t *)buf + 1);
-        sges[1].length = 8;
-        sges[1].lkey = mr->lkey;
-        wrs[1].wr_id = 1;
-        wrs[1].next = nullptr;
-        wrs[1].sg_list = &sges[1];
-        wrs[1].num_sge = 1;
-        wrs[1].opcode = IBV_WR_RDMA_WRITE;
-        wrs[1].send_flags = IBV_SEND_SIGNALED;
+        auto wr1 = generate_send_wr(0, sge1.get(), 1, (byte_ptr_t)remote.addr, nullptr);
+        auto wr2 = generate_send_wr(1, sge2.get(), 1, (byte_ptr_t)remote.addr, nullptr);
+        wr1->next = wr2.get();
+        wr1->send_flags = 0;
 
         struct ibv_send_wr *bad_wr;
 
