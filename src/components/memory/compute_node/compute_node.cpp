@@ -270,10 +270,10 @@ namespace DiStore::Memory {
 
         std::vector<std::unique_ptr<RDMAContext>> rdma;
 
-        auto common_buffer = new byte_t[2048];
+        auto common_buffer = new byte_t[4096];
         for (const auto &n : memory_nodes) {
             auto socket = Misc::socket_connect(false, n->roce_port, n->roce_addr.to_string().c_str());
-            auto [rdma_ctx, status] = device->open(common_buffer, 2048, 1,
+            auto [rdma_ctx, status] = device->open(common_buffer, 4096, 1,
                                                    RDMADevice::get_default_mr_access(),
                                                    *RDMADevice::get_default_qp_init_attr());
 

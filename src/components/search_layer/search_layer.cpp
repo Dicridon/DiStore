@@ -21,7 +21,6 @@ namespace DiStore::SearchLayer {
             current_level = level;
         }
 
-
         for (int i = 0; i < level; i++) {
             new_node->forwards[i] = update[i]->forwards[i];
             update[i]->forwards[i] = new_node;
@@ -60,6 +59,14 @@ namespace DiStore::SearchLayer {
             }
 
             update[i] = walker;
+        }
+
+        if (level > current_level) {
+            for (auto i = current_level; i < level; i++) {
+                update[i] = head;
+            }
+
+            current_level = level;
         }
 
         for (int i = 1; i < level; i++) {

@@ -256,9 +256,6 @@ namespace DiStore::RDMAUtil {
     }
 
     auto RDMAContext::post_batch_write_test() -> void {
-        struct ibv_send_wr wrs[2];
-        struct ibv_sge sges[2];
-
         auto ptr = (uint64_t *)buf;
         ptr[0] = 0x12344321UL;
         ptr[1] = 0xabcddcbaUL;
@@ -267,13 +264,13 @@ namespace DiStore::RDMAUtil {
         auto sge2 = generate_sge(nullptr, sizeof(uint64_t), sizeof(uint64_t));
 
         auto wr1 = generate_send_wr(0, sge1.get(), 1, (byte_ptr_t)remote.addr, nullptr);
-        auto wr2 = generate_send_wr(1, sge2.get(), 1, (byte_ptr_t)remote.addr, nullptr);
+        auto wr2 = generate_send_wr(1, sge2.get(), 1, (byte_ptr_t)remote.addr + 8, nullptr);
         wr1->next = wr2.get();
         wr1->send_flags = 0;
 
         struct ibv_send_wr *bad_wr;
 
-        if (auto ret = ibv_post_send(qp, wrs, &bad_wr); ret != 0) {
+        if (auto ret = ibv_post_send(qp, wr1.get(), &bad_wr); ret != 0) {
             Debug::error("posting wr %d failed\n", bad_wr->wr_id);
             return;
         }

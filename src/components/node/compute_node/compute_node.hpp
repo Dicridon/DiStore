@@ -304,23 +304,22 @@ namespace DiStore::Cluster {
             right->rlink = left->rlink;
             left->rlink = r;
 
-            if (l.get_node() == r.get_node()) {
-                auto rdma = remote_memory_allocator.get_rdma(l);
-                auto l_sge = rdma->generate_sge(nullptr, sizeof(LinkedNode16), 0);
-                auto r_sge = rdma->generate_sge(nullptr, sizeof(LinkedNode16), sizeof(LinkedNode16));
+            // for implementation simplicity, we assume only one MN``
+            auto rdma = remote_memory_allocator.get_rdma(l);
+            auto l_sge = rdma->generate_sge(nullptr, sizeof(LinkedNode16), 0);
+            auto r_sge = rdma->generate_sge(nullptr, sizeof(LinkedNode16), sizeof(LinkedNode16));
 
-                auto wr_l = rdma->generate_send_wr(0, l_sge.get(), 1, l.get_as<byte_ptr_t>(), nullptr);
-                auto wr_r = rdma->generate_send_wr(1, r_sge.get(), 1, r.get_as<byte_ptr_t>(), nullptr);
+            auto wr_l = rdma->generate_send_wr(0, l_sge.get(), 1, l.get_as<byte_ptr_t>(), nullptr);
+            auto wr_r = rdma->generate_send_wr(1, r_sge.get(), 1, r.get_as<byte_ptr_t>(), nullptr);
 
-                wr_l->send_flags = 0;
-                wr_l->next = wr_r.get();
+            wr_l->send_flags = 0;
+            wr_l->next = wr_r.get();
 
-                rdma->post_batch_write(wr_l.get());
+            rdma->post_batch_write(wr_l.get());
 
-                if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
-                    data_node->data_node = l;
-                    return nullptr;
-                }
+            if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
+                data_node->data_node = l;
+                return nullptr;
             }
 
             data_node->data_node = l;

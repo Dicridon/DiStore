@@ -321,6 +321,7 @@ namespace DiStore::Cluster {
             }
 
             data_node->data_node = remote;
+            data_node->type = real->type;
         }
 
         // leave

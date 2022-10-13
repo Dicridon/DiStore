@@ -103,7 +103,6 @@ namespace DiStore::SearchLayer {
         // a new node is linked at the bottom level, but upper levels are not updated
         auto calibrate(SkipListNode *node, int level) -> void;
 
-
         // search whether a member key's anchor key is in the list
         // 1 -> 10 -> 20 -> ... -> 100, searching for 3 will return 1
         auto fuzzy_search(const std::string &member) -> SkipListNode *;
