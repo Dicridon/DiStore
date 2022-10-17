@@ -240,7 +240,6 @@ namespace DiStore::RDMAUtil {
         wr->send_flags = IBV_SEND_SIGNALED;
         wr->wr.rdma.remote_addr = (uint64_t)remote;
         wr->wr.rdma.rkey = this->remote.rkey;
-
         return wr;
     }
 
