@@ -98,7 +98,7 @@ namespace DiStore::Cluster {
         // we don't have to find the corrent fetch_as type since remote memory is completely
         // exposed to us
         auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
-                                                                     sizeof(LinkedNode16));
+                                                                       sizeof(LinkedNode16));
 
         auto v = buffer->find(key);
         if (ver != node->version)
@@ -118,6 +118,9 @@ namespace DiStore::Cluster {
         }
 
         auto node = slist.fuzzy_search(key);
+
+        if (node == nullptr)
+            return false;
 
         // we don't have to find the corrent fetch_as type since remote memory is completely
         // exposed to us
@@ -277,6 +280,15 @@ namespace DiStore::Cluster {
         case LinkedNodeType::Type16:
             return put16(data_node, key, value);
         default:
+            /*
+             * If we reach here, it's likely that a key smaller than any key in the
+             * current dataset will be inserted, thus the fuzzy_search returns the
+             * head of the skiplist. This can result in competition on the first
+             * data node and we need to ensure the smallest key in the competition
+             * keys are used to update the anchor key. We don't handle this case,
+             * instead, we insert the smallest key in the benchmark before
+             * benchmarking to avoid such case.
+             */
             throw std::runtime_error("Varaible-sized node not supported");
         }
     }
@@ -286,7 +298,6 @@ namespace DiStore::Cluster {
         bool ret = true;
         auto [win, shared_ctx] = try_win<LinkedNode10>(data_node,
                                                        Concurrency::ConcurrencyContextType::Insert);
-
         if (!win) {
             if (shared_ctx->type != Concurrency::ConcurrencyContextType::Insert)
                 return false;
@@ -441,7 +452,7 @@ namespace DiStore::Cluster {
     // 16 + 5 -> 12 + 12
     auto ComputeNode::put16(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool {
         bool ret = true;
-        auto [win, shared_ctx] = try_win<LinkedNode14>(data_node,
+        auto [win, shared_ctx] = try_win<LinkedNode16>(data_node,
                                                        Concurrency::ConcurrencyContextType::Insert);
 
         if (!win) {
@@ -488,6 +499,8 @@ namespace DiStore::Cluster {
             else
                 // update_queue.push({ranchor, right->type, r});
                 async_update(data_node, ranchor, right->type, r);
+
+            data_node->type = left->type;
         }
 
         ++data_node->version;
@@ -568,7 +581,7 @@ namespace DiStore::Cluster {
                                         DataLayer::Constants::KEYLEN);
         // partially sorted, start migrating
         right->next = 0;
-        for (int i = 0; i < total_records; i++) {
+        for (size_t i = 0; i < total_records; i++) {
             if (picked[i])
                 continue;
 
@@ -577,11 +590,11 @@ namespace DiStore::Cluster {
         }
 
         // compact the old node and calibrate metadata
-        for (int i = 0; i < total_records; i++) {
+        for (size_t i = 0; i < total_records; i++) {
             if (picked[i])
                 continue;
 
-            for (int j = i; j < total_records; j++) {
+            for (size_t j = i; j < total_records; j++) {
                 if (picked[j]) {
                     source_buffer->fingerprints[i] = source_buffer->fingerprints[j];
                     memcpy(source_buffer->pairs[i].key, source_buffer->pairs[j].key,
@@ -623,11 +636,12 @@ namespace DiStore::Cluster {
         int reorder_map[32] = {-1};
         bool picked[32] = {false};
 
-        construct_reorder_map(source_buffer, left_cap, reorder_map, picked);
+        // construct_reorder_map(source_buffer, left_cap, reorder_map, picked);
+        construct_reorder_map(&tmp_node, left_cap, reorder_map, picked);
         auto right_anchor = std::string((char *)source_buffer->pairs[reorder_map[left_cap]].key,
                                         DataLayer::Constants::KEYLEN);
         // left node should not take the anchor key of right node
-        picked[left_cap] = false;
+        picked[reorder_map[left_cap]] = false;
 
         auto left = source_buffer;
         auto right = source_buffer + 1;
@@ -635,7 +649,7 @@ namespace DiStore::Cluster {
         left->next = 0;
         right->next = 0;
 
-        for (int i = 0; i < tmp_node.next; i++) {
+        for (size_t i = 0; i < tmp_node.next; i++) {
             if (picked[i]) {
                 left->fingerprints[left->next] = tmp_node.fingerprints[i];
                 memcpy(&left->pairs[left->next], &tmp_node.pairs[i], sizeof(DataLayer::KV));
@@ -674,4 +688,17 @@ namespace DiStore::Cluster {
         self_info.dump();
         remote_memory_allocator.dump();
     }
+
+    auto ComputeNode::dump_list() noexcept -> void {
+        slist.dump();
+
+        auto walker = slist.iter();
+
+        while (walker->forwards[0]) {
+            walker = walker->forwards[0];
+            auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(walker->data_node,
+                                                                           sizeof(LinkedNode16));
+            buffer->dump();
+        }
+     }
 }

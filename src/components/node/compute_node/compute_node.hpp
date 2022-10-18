@@ -65,6 +65,7 @@ namespace DiStore::Cluster {
 
         // for debug
         auto report_cluster_info() const noexcept -> void;
+        auto dump_list() noexcept -> void;
 
         ComputeNode() = default;
         ComputeNode(const ComputeNode &) = delete;
@@ -156,6 +157,7 @@ namespace DiStore::Cluster {
         auto put12(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool;
         auto put14(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool;
         auto put16(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool;
+
 
         // try to win the put and fetch remote memory to local
         // pair[0], win the competition

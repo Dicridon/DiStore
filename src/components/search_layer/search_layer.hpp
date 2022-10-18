@@ -66,7 +66,8 @@ namespace DiStore::SearchLayer {
     class SkipList {
     public:
         SkipList() : current_level(1) {
-            head = SkipListNode::make_skip_node(Constants::MAX_LEVEL, "");
+            head = SkipListNode::make_skip_node(Constants::MAX_LEVEL, "", nullptr,
+                                                DataLayer::LinkedNodeType::TypeHead);
         };
         SkipList(const SkipList &) = delete;
         SkipList(SkipList &&) = delete;
@@ -109,6 +110,10 @@ namespace DiStore::SearchLayer {
         auto remove(const std::string &anchor) -> bool;
 
         auto dump() const noexcept -> void;
+
+        inline auto iter() noexcept -> SkipListNode * {
+            return head;
+        }
 
         // delete and range are not needed
     private:

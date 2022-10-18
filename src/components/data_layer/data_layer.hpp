@@ -15,6 +15,7 @@ namespace DiStore::DataLayer {
     namespace Enums {
         // DataLayer includes the implementation of adaptive linked array
         enum LinkedNodeType : uint32_t {
+            TypeHead = 1,
             Type10 = 10,
             Type12 = 12,
             Type14 = 14,
@@ -66,7 +67,7 @@ namespace DiStore::DataLayer {
                 return false;
             }
 
-            fingerprints[next] = CityHash64(key.c_str(), key.size());
+            fingerprints[next] = (uint8_t)CityHash64(key.c_str(), key.size());
             memcpy(pairs[next].key, key.c_str(), key.size());
             memcpy(pairs[next].value, value.c_str(), value.size());
             ++next;
@@ -75,7 +76,7 @@ namespace DiStore::DataLayer {
         }
 
         auto find(const std::string &key) -> std::optional<std::string> {
-            auto finger = CityHash64(key.c_str(), key.size());
+            auto finger = (uint8_t)CityHash64(key.c_str(), key.size());
 
             for (int i = 0; i < next; i++) {
                 // fuck the type conversion
@@ -90,7 +91,7 @@ namespace DiStore::DataLayer {
         }
 
         auto update(const std::string &key, const std::string &value) -> bool {
-            auto finger = CityHash64(key.c_str(), key.size());
+            auto finger = (uint8_t)CityHash64(key.c_str(), key.size());
 
             for (int i = 0; i < next; i++) {
                 if (finger != fingerprints[i])
@@ -120,6 +121,19 @@ namespace DiStore::DataLayer {
             return true;
         }
 
+        auto dump() const noexcept -> void {
+            std::cout << ">> Type: " << type << "\n";
+            std::cout << ">> Next: " << next << "\n";
+            for (int i = 0; i < next; i++) {
+                std::cout << (uint64_t)fingerprints[i] << " ";
+            }
+            std::cout << "\n";
+            for (int i = 0; i < next; i++) {
+                auto k = std::string((char *)&pairs[i].key[0], Constants::KEYLEN);
+                std::cout << k << " ";
+            }
+            std::cout << "\n";
+        }
         // checking number of KVs in this node and change type accordingly
     };
 
