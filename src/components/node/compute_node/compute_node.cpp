@@ -369,24 +369,10 @@ namespace DiStore::Cluster {
             if (pendings <= 4) {
                 ret = eager_morph(data_node, shared_ctx, key, value, done);
             } else {
-                // 17 pairs in total, should split
-                Concurrency::ConcurrencyRequests *req = nullptr;
-                while (shared_ctx->requests.try_pop(req)) {
-                    // space is guaranteed to be sufficient
-                    req->succeed = real->store(*reinterpret_cast<const std::string *>(req->tag),
-                                               *reinterpret_cast<const std::string *>(req->content));
-                    req->is_done = false;
-                }
+                auto [left, right, ranchor] = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
 
-                auto [left, right, ranchor] = inplace_split_node(real, 8);
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type10;
-
-                if (key > ranchor) {
-                    right->store(key, value);
-                } else {
-                    left->store(key, value);
-                }
 
                 if (auto r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
                     r.is_nullptr()) {
@@ -396,6 +382,8 @@ namespace DiStore::Cluster {
                     async_update(data_node, ranchor, LinkedNodeType::Type10, r);
                     ret = true;
                 }
+
+                data_node->type = left->type;
             }
         }
 
@@ -440,6 +428,8 @@ namespace DiStore::Cluster {
                     async_update(data_node, ranchor, LinkedNodeType::Type12, r);
                     ret = true;
                 }
+
+                data_node->type = left->type;
             }
         }
 
@@ -564,7 +554,6 @@ namespace DiStore::Cluster {
         return true;
     }
 
-
     auto ComputeNode::inplace_split_node(LinkedNode16 *source_buffer, size_t left_cap)
             -> std::tuple<LinkedNode16 *, LinkedNode16 *, std::string>
     {
@@ -579,6 +568,8 @@ namespace DiStore::Cluster {
         construct_reorder_map(source_buffer, left_cap, reorder_map, picked);
         auto right_anchor = std::string((char *)source_buffer->pairs[reorder_map[left_cap]].key,
                                         DataLayer::Constants::KEYLEN);
+        picked[reorder_map[left_cap]] = false;
+
         // partially sorted, start migrating
         right->next = 0;
         for (size_t i = 0; i < total_records; i++) {
