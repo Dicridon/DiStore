@@ -15,21 +15,7 @@ auto main() -> int {
     allocator.apply_for_memory(segment, base);
     allocator.dump();
 
-    auto a = allocator.allocate(128);
-    std::cout << ">> Allocated at " << a.void_ptr() << "\n";
-    allocator.dump();    
-    a = allocator.allocate(128);
-    std::cout << ">> Allocated at " << a.void_ptr() << "\n";
-    allocator.dump();    
-    a = allocator.allocate(128);
-    std::cout << ">> Allocated at " << a.void_ptr() << "\n";
-    allocator.dump();    
-    a = allocator.allocate(128);
-    std::cout << ">> Allocated at " << a.void_ptr() << "\n";
-    allocator.dump();    
-
-
-    a = allocator.allocate(63);
-    std::cout << ">> Allocated at " << a.void_ptr() << "\n";
-    allocator.dump();    
+    for (size_t i = 1; i <= 4096; i++) {
+        std::cout << i << ": " << dump_allocation_class(allocator.get_class(i)) << "\n";
+    }
 }

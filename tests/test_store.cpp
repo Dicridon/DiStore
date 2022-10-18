@@ -18,13 +18,37 @@ auto launch_compute(const std::string &config, const std::string &memory_nodes, 
         return;
     }
 
+    std::cout << "Populating\n";
     for (size_t i = 0; i < 100; i++) {
         auto k = std::to_string(1000000 + i);
+        k.append(DataLayer::Constants::KEYLEN - k.size(), '0');
         auto v = std::to_string(2000000 + i);
 
         node->put(k, v);
         auto r = node->get(k);
         std::cout << r.value() << "\n";
+    }
+
+    std::cout << "Double checking\n";
+    for (size_t i = 0; i < 100; i++) {
+        auto k = std::to_string(1000000 + i);
+        k.append(DataLayer::Constants::KEYLEN - k.size(), '0');
+        auto r = node->get(k);
+        if (!r.has_value()) {
+            std::cout << k << " is missing\n";
+            std::cout << "Double checking failed\n";
+            break;
+        }
+    }
+
+    std::cout << "Updating\n";
+    for (size_t i = 0; i < 100; i++) {
+        auto k = std::to_string(1000000 + i);
+        k.append(DataLayer::Constants::KEYLEN - k.size(), '0');
+        if (!node->update(k, k)) {
+            std::cout << "Updaing " << k << " failed\n";
+            break;
+        }
     }
 
     while (true)

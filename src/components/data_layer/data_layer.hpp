@@ -75,8 +75,12 @@ namespace DiStore::DataLayer {
         }
 
         auto find(const std::string &key) -> std::optional<std::string> {
+            auto finger = CityHash64(key.c_str(), key.size());
+
             for (int i = 0; i < next; i++) {
                 // fuck the type conversion
+                if (finger != fingerprints[i])
+                    continue;
                 if (key.compare(0, key.size(), (char *)&pairs[i].key[0], key.size()) == 0) {
                     return std::string((char *)&pairs[i].value[0], Constants::VALLEN);
                 }
@@ -86,7 +90,12 @@ namespace DiStore::DataLayer {
         }
 
         auto update(const std::string &key, const std::string &value) -> bool {
+            auto finger = CityHash64(key.c_str(), key.size());
+
             for (int i = 0; i < next; i++) {
+                if (finger != fingerprints[i])
+                    continue;
+
                 // fuck the type conversion
                 if (key.compare(0, key.size(), (char *)&pairs[i].key[0]) == 0) {
                     memcpy(pairs[i].value, value.c_str(), value.size());
