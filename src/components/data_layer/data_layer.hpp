@@ -4,12 +4,13 @@
 #include "memory/remote_memory/remote_memory.hpp"
 #include "city/city.hpp"
 #include "misc/misc.hpp"
+#include "workload/workload.hpp"
 
 namespace DiStore::DataLayer {
     using namespace Memory;
     namespace Constants {
-        static constexpr size_t KEYLEN = 32;
-        static constexpr size_t VALLEN = 32;
+        static constexpr size_t KEYLEN = Workload::Constants::KEY_SIZE;
+        static constexpr size_t VALLEN = KEYLEN;
     }
 
     namespace Enums {

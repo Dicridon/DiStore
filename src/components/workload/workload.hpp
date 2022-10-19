@@ -6,6 +6,11 @@
 #include <memory>
 
 namespace DiStore::Workload {
+    namespace Constants {
+        // Value size is not so important
+        static constexpr size_t KEY_SIZE = 16;
+    };
+
     enum class WorkloadType {
         Uniform,
         Zipf,
@@ -81,7 +86,7 @@ namespace DiStore::Workload {
                 break;
             case WorkloadType::Zipf:
                 generator = std::make_unique<ZipfGenerator>(range, theta, rand_seed);
-                break;                
+                break;
             default:
                 generator = nullptr;
             }
@@ -90,6 +95,10 @@ namespace DiStore::Workload {
         }
 
         ~BenchmarkWorkload() = default;
+
+        inline auto next_unrecorded() -> uint64_t {
+            return generator->next();
+        }
 
         inline auto next() -> uint64_t {
             auto ret = generator->next();
@@ -109,6 +118,89 @@ namespace DiStore::Workload {
         std::unique_ptr<WorkloadGenerator> generator;
         uint64_t num_ops;
         std::vector<uint64_t> workload;
+    };
+
+    enum class YCSBWorkloadType {
+        YCSB_A,
+        YCSB_B,
+        YCSB_C,
+        YCSB_D,
+        YCSB_E,
+    };
+
+    enum class YCSBOperation {
+        Insert,
+        Update,
+        Search,
+        Scan,
+    };
+
+    class YCSBWorkload {
+    public:
+        static auto make_ycsb_workload(uint64_t num, uint64_t range,
+                                       YCSBWorkloadType t = YCSBWorkloadType::YCSB_C,
+                                       double theta = 0.99, uint64_t rand_seed = 0)
+            -> std::unique_ptr<YCSBWorkload>
+        {
+            return std::make_unique<YCSBWorkload>(num, range, t, theta, rand_seed);
+        }
+
+
+        YCSBWorkload(uint64_t num, uint64_t range, YCSBWorkloadType t = YCSBWorkloadType::YCSB_C,
+                     double theta = 0.99, uint64_t rand_seed = 0)
+        {
+            load_generator = BenchmarkWorkload::make_bench_workload(num, range,
+                                                                    WorkloadType::Zipf,
+                                                                    theta, rand_seed);
+            op_generator = BenchmarkWorkload::make_bench_workload(num, 99);
+            num_ops = num;
+            type = t;
+        }
+
+        ~YCSBWorkload() = default;
+        // insert  |  search  |  update  |  scan
+        inline auto next() -> std::pair<YCSBOperation, std::string> {
+            auto k = std::to_string(load_generator->next_unrecorded());
+            k.append(Constants::KEY_SIZE - k.size(), 'x');
+
+            auto op = op_generator->next();
+
+            switch (type) {
+            case YCSBWorkloadType::YCSB_A:
+                if (op < 49) {
+                    return {YCSBOperation::Update, k};
+                } else {
+                    return {YCSBOperation::Search, k};
+                }
+            case YCSBWorkloadType::YCSB_B:
+                if (op < 4) {
+                    return {YCSBOperation::Update, k};
+                } else {
+                    return {YCSBOperation::Search, k};
+                }
+            case YCSBWorkloadType::YCSB_C:
+                return {YCSBOperation::Search, k};
+            case YCSBWorkloadType::YCSB_D:
+                if (op < 4) {
+                    return {YCSBOperation::Insert, k};
+                } else {
+                    return {YCSBOperation::Search, k};
+                }
+            case YCSBWorkloadType::YCSB_E:
+                if (op < 4) {
+                    return {YCSBOperation::Insert, k};
+                } else {
+                    return {YCSBOperation::Scan, k};
+                }
+            default:
+                throw std::invalid_argument("Unkown YCSB workload type");
+            }
+        }
+    private:
+        std::unique_ptr<BenchmarkWorkload> load_generator;
+        std::unique_ptr<BenchmarkWorkload> op_generator;
+        uint64_t num_ops;
+        YCSBWorkloadType type;
     };
 }
 #endif
