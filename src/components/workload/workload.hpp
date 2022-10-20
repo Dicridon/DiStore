@@ -161,7 +161,7 @@ namespace DiStore::Workload {
         // insert  |  search  |  update  |  scan
         inline auto next() -> std::pair<YCSBOperation, std::string> {
             auto k = std::to_string(load_generator->next_unrecorded());
-            k.append(Constants::KEY_SIZE - k.size(), 'x');
+            k.insert(0, Constants::KEY_SIZE - k.size(), '0');
 
             auto op = op_generator->next();
 

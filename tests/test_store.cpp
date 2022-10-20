@@ -22,14 +22,14 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
 
     auto total = 10000000UL;
     auto guard = std::to_string(0);
-    guard.append(DataLayer::Constants::KEYLEN - guard.size(), 'x');
+    // guard.append(DataLayer::Constants::KEYLEN - guard.size(), 'x');
 
     auto ycsb = Workload::YCSBWorkload::make_ycsb_workload(total,
                                                            total / 10 /* ensure skewness*/);
     Debug::info("Populating");
     for (size_t i = 0; i < total / 10; i++) {
         auto k = std::to_string(i);
-        k.append(Workload::Constants::KEY_SIZE - k.size(), '0');
+        k.insert(0, Workload::Constants::KEY_SIZE - k.size(), '0');
 
         if (!node->put(k, k)) {
             Debug::error("Putting key %s failed\n", k.c_str());
@@ -69,7 +69,9 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     auto end = std::chrono::steady_clock::now();
 
     double time = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
-    Debug::info("Throughput: %fKOPS", total / time / 1000);
+    Debug::info("Throughput: %fKOPS\n", total / time / 1000);
+    Debug::info("You may see segfault due to the destruction of RDMAContext,"
+                "but this program has fulfilled its duty:)\n");
 }
 
 auto launch_compute(const std::string &config, const std::string &memory_nodes, int threads) -> void {
@@ -87,16 +89,16 @@ auto launch_compute(const std::string &config, const std::string &memory_nodes, 
 
     auto total = 10000000UL;
     auto guard = std::to_string(0);
-    guard.append(DataLayer::Constants::KEYLEN - guard.size(), '0');
+    // guard.append(DataLayer::Constants::KEYLEN - guard.size(), '0');
     std::cout << "Populating\n";
     for (size_t i = 0; i < total; i++) {
         auto k = std::to_string(total + i);
-        k.append(DataLayer::Constants::KEYLEN - k.size(), '0');
-        auto v = std::to_string(total * 2 + i);
+        k.insert(0, DataLayer::Constants::KEYLEN - k.size(), '0');
 
-        node->put(k, v);
-        auto r = node->get(k);
-        std::cout << r.value() << "\n";
+        if (!node->put(k, k)) {
+            Debug::error("Failed to insert %s\n", k.c_str());
+            return;
+        }
     }
 
     std::cout << "Double checking\n";
