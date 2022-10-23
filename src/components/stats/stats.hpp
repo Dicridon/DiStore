@@ -7,6 +7,28 @@
 #include <algorithm>
 #include <numeric>
 namespace DiStore::Stats {
+    class LatencyCatcher {
+    public:
+        LatencyCatcher() = default;
+        ~LatencyCatcher() = default;
+
+        inline auto begin() noexcept {
+            s = std::chrono::steady_clock::now();
+        }
+
+        inline auto end() noexcept {
+            e = std::chrono::steady_clock::now();
+        }
+
+        // report in nanosecond
+        inline auto report() noexcept -> double {
+            return double(std::chrono::duration_cast<std::chrono::nanoseconds>(e - s).count());
+        }
+    private:
+        std::chrono::time_point<std::chrono::steady_clock> s;
+        std::chrono::time_point<std::chrono::steady_clock> e;
+    };
+
     /*
      * How to use:
      *     This class collects timespan over a certain number of operations
@@ -50,12 +72,12 @@ namespace DiStore::Stats {
         }
 
         inline auto p99() -> double {
-            process();            
+            process();
             return Misc::p99(sorted);
         }
 
         inline auto p999() -> double {
-            process();            
+            process();
             return Misc::p999(sorted);
         }
 

@@ -9,6 +9,7 @@
 #include "search_layer/search_layer.hpp"
 #include "data_layer/data_layer.hpp"
 #include "handover_locktable/handover_locktable.hpp"
+#include "breakdown/breakdown.hpp"
 
 namespace DiStore::Cluster {
     using namespace RPCWrapper;
