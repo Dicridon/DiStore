@@ -2,7 +2,7 @@
 #include "node/compute_node/compute_node.hpp"
 #include "cmd_parser/cmd_parser.hpp"
 #include "workload/workload.hpp"
-
+#include "stats/stats.hpp"
 #include <chrono>
 
 using namespace CmdParser;
@@ -37,39 +37,81 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
         }
     }
 
+    // start benching
+    const size_t sample_batch = 1000;
+    std::vector<std::thread> workers;
+    std::vector<std::vector<Stats::TimedLatency>> latencies;
+
+    std::mutex print_lock;
+    workers.reserve(threads);
+
     auto start = std::chrono::steady_clock::now();
-    for (size_t i = 0; i < total; i++) {
-        auto op = ycsb->next();
-        switch (op.first) {
-        case Workload::YCSBOperation::Insert:
-            if (!node->put(op.second, op.second)) {
-                Debug::error("Putting %s failed\n", op.second.c_str());
-                return;
+    for (int i = 0; i < threads; i++) {
+        workers.emplace_back([&]() {
+            auto total_counter = 0;
+            const auto local_batch = 1000UL;
+            auto local_counter = 0;
+            Stats::TimedLatency lat_stats(sample_batch);
+            for (size_t i = 0; i < total / threads; i++) {
+
+                auto op = ycsb->next();
+                switch (op.first) {
+                case Workload::YCSBOperation::Insert:
+                    if (!node->put(op.second, op.second)) {
+                        Debug::error("Putting %s failed\n", op.second.c_str());
+                        return;
+                    }
+                    break;
+                case Workload::YCSBOperation::Update:
+                    if (!node->update(op.second, op.second)) {
+                        Debug::error("Updating %s failed\n", op.second.c_str());
+                        return;
+                    }
+                    break;
+                case Workload::YCSBOperation::Search:
+                    if (auto v = node->get(op.second); !v.has_value()) {
+                        Debug::error("Searching %s failed\n", op.second.c_str());
+                        return;
+                    }
+                    break;
+                case Workload::YCSBOperation::Scan:
+                    return;
+                default:
+                    Debug::error("Unkown operation");
+                    return;
+                }
+
+                if ((++local_counter) == local_batch) {
+                    lat_stats.record_time();
+                    local_counter = 0;
+
+                    if (++total_counter == sample_batch) {
+                        lat_stats.process();
+                        std::stringstream ss;
+                        ss << "Current latency percentiles of thread " << i << ": "
+                           << "avg: " << lat_stats.avg() << " us, "
+                           << "P50: " << lat_stats.p50() << " us, "
+                           << "P90: " << lat_stats.p90() << " us, "
+                           << "P99: " << lat_stats.p99() << " us\n";
+                        print_lock.lock();
+                        std::cout << ss.str();
+                        print_lock.unlock();
+                        total_counter = 0;
+                    }
+                }
             }
-            break;
-        case Workload::YCSBOperation::Update:
-            if (!node->update(op.second, op.second)) {
-                Debug::error("Updating %s failed\n", op.second.c_str());
-                return;
-            }
-            break;
-        case Workload::YCSBOperation::Search:
-            if (auto v = node->get(op.second); !v.has_value()) {
-                Debug::error("Searching %s failed\n", op.second.c_str());
-                return;
-            }
-            break;
-        case Workload::YCSBOperation::Scan:
-            return;
-        default:
-            Debug::error("Unkown operation");
-            return;
-        }
+        });
+    }
+
+    for (auto &t : workers) {
+        t.join();
     }
     auto end = std::chrono::steady_clock::now();
 
     double time = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
     Debug::info("Throughput: %fKOPS\n", total / time / 1000);
+    node->report_search_layer_stats();
+    node->report_data_layer_stats();
     Debug::info("You may see segfault due to the destruction of RDMAContext,"
                 "but this program has fulfilled its duty:)\n");
 }

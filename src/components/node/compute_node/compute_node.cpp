@@ -34,6 +34,7 @@ namespace DiStore::Cluster {
         remote_put = false;
         local_nodes[0] = new LinkedNode10;
         local_nodes[1] = new LinkedNode10;
+
         Debug::info("Compute node %s is intialized\n", self.c_str());
 
         std::thread([&] {
@@ -664,6 +665,10 @@ namespace DiStore::Cluster {
         data_node->forwards[0] = new_node;
         new_node->backward = data_node;
 
+        if (level == 1) {
+            return;
+        }
+
         auto req = new CalibrateContext;
         req->level = level;
         req->new_node = new_node;
@@ -693,4 +698,33 @@ namespace DiStore::Cluster {
             buffer->dump();
         }
      }
+
+    auto ComputeNode::report_search_layer_stats() const -> void {
+        Debug::info("Reporting search layer stats\n");
+        slist.show_levels();
+    }
+
+    auto ComputeNode::report_data_layer_stats() -> void {
+        Debug::info("Reporting search layer stats\n");
+        Debug::info("Collecting stats via network, which will take some time\n");
+        auto iter = slist.iter();
+
+        while(iter->forwards[0]) {
+            auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(iter->forwards[0]->data_node,
+                                                                           sizeof(LinkedNode16));
+            data_layer_stats[buffer->type].push_back(buffer->usage());
+        }
+
+        for (auto &[k, v] : data_layer_stats) {
+            std::sort(v.begin(), v.end(), std::greater<>());
+        }
+
+        for (auto &[k, v] : data_layer_stats) {
+            std::cout << ">> Type " << k << " usage: "
+                      << "avg: " << Misc::avg(v) << ", "
+                      << "p50: " << Misc::p50(v) << ", "
+                      << "p90: " << Misc::p90(v) << ", "
+                      << "p99: " << Misc::p99(v) << "\n";
+        }
+    }
 }

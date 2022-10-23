@@ -135,6 +135,21 @@ namespace DiStore::DataLayer {
             }
             std::cout << "\n";
         }
+
+        auto usage() const noexcept -> double {
+            switch (type) {
+            case LinkedNodeType::Type10:
+                return next / 10.0;
+            case LinkedNodeType::Type12:
+                return next / 12.0;
+            case LinkedNodeType::Type14:
+                return next / 14.0;
+            case LinkedNodeType::Type16:
+                return next / 16.0;
+            default:
+                return 0;
+            }
+        }
         // checking number of KVs in this node and change type accordingly
     };
 

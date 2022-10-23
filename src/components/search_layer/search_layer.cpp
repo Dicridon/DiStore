@@ -143,6 +143,30 @@ namespace DiStore::SearchLayer {
         }
     }
 
+    auto SkipList::show_levels() const noexcept -> void {
+        size_t level_length[Constants::MAX_LEVEL];
+        size_t total_nodes = 0;
+
+        for (int i = 0; i < current_level; i++) {
+            level_length[i] = 0;
+        }
+        
+        for (int i = current_level - 1; i >= 0; i--) {
+            auto walker = head;
+            while(walker->forwards[i]) {
+                ++level_length[i];
+                ++total_nodes;                
+                walker = walker->forwards[i];
+            }
+        }
+
+        std::cout << ">> Total nodes " << total_nodes << ", "
+                  << "Comsuming " << total_nodes * sizeof(SkipListNode) / (1 << 20UL) << " MiB space\n";
+        for (int i = 0; i < current_level; i++) {
+            std::cout << ">> Level " << i << " length is " << level_length[i] << "\n";
+        }
+    }
+
     auto SkipList::search_node(const std::string &anchor) const noexcept -> SkipListNode * {
         auto walker = head;
 

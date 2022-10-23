@@ -65,6 +65,12 @@ namespace DiStore::Misc {
 
     template<typename T,
              typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+    auto p50(const std::vector<T> &sorted) -> T {
+        return percentile(sorted, 50);
+    }
+    
+    template<typename T,
+             typename = std::enable_if_t<std::is_arithmetic_v<T>>>
     auto p90(const std::vector<T> &sorted) -> T {
         return percentile(sorted, 90);
     }

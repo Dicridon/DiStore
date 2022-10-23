@@ -111,15 +111,16 @@ namespace DiStore::SearchLayer {
 
         auto dump() const noexcept -> void;
 
-        inline auto iter() noexcept -> SkipListNode * {
+        inline auto iter() const noexcept -> SkipListNode * {
             return head;
         }
+
+        auto show_levels() const noexcept -> void;
 
         // delete and range are not needed
     private:
         int current_level;
         SkipListNode *head;
-
         auto search_node(const std::string &anchor) const noexcept -> SkipListNode *;
     };
 }

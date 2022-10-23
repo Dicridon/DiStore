@@ -66,6 +66,10 @@ namespace DiStore::Cluster {
         // for debug
         auto report_cluster_info() const noexcept -> void;
         auto dump_list() noexcept -> void;
+        auto report_search_layer_stats() const -> void;
+
+        // this method takes RDMA buffer's ownership, thus is not const
+        auto report_data_layer_stats() -> void;
 
         ComputeNode() = default;
         ComputeNode(const ComputeNode &) = delete;
@@ -91,6 +95,7 @@ namespace DiStore::Cluster {
         std::string local_anchors[2];
         std::mutex local_mutex;
 
+        std::map<LinkedNodeType, std::vector<double>> data_layer_stats;
 
         auto initialize_erpc() -> bool {
             auto uri = self_info.erpc_addr.to_uri(self_info.erpc_port);
