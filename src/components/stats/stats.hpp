@@ -93,10 +93,9 @@ namespace DiStore::Stats {
             while (s != data.cend()) {
                 double span = std::chrono::duration_cast<std::chrono::microseconds>(*s - *(s - 1)).count();
                 sorted.push_back(span);
-
-                std::sort(sorted.begin(), sorted.end(), std::greater<>());
+                ++s;
             }
-
+            std::sort(sorted.begin(), sorted.end(), std::greater<>());
             return processed = true;
         }
     private:;

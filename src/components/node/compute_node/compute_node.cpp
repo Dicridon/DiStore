@@ -726,5 +726,7 @@ namespace DiStore::Cluster {
                       << "p90: " << Misc::p90(v) << ", "
                       << "p99: " << Misc::p99(v) << "\n";
         }
+
+        iter = iter->forwards[0];
     }
 }
