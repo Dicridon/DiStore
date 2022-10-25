@@ -77,7 +77,7 @@ namespace DiStore::Cluster {
     struct MemoryNodeInfo final : NodeInfo {
         Memory::RemotePointer base_addr;
         size_t cap = 0;
-        std::unique_ptr<RDMAUtil::RDMAContext> rdma_ctx;
+        std::vector<std::unique_ptr<RDMAUtil::RDMAContext>> rdma_ctxs;
         std::unique_ptr<RDMAUtil::RDMADevice> rdma_device;
 
         auto dump() const noexcept -> void override;

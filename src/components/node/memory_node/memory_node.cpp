@@ -109,17 +109,30 @@ namespace DiStore::Cluster {
             return {};
         }
 
-        std::thread t([socket](RDMAUtil::RDMAContext *ctx) {
+        std::thread t([socket, this]() {
             while(true){
                 auto sock = Misc::accept_nonblocking(socket);
                 if (sock != -1) {
+                    auto [ctx, s] = self_info.rdma_device->open(self_info.base_addr.get_as<void *>(),
+                                                           self_info.cap, 1,
+                                                           RDMAUtil::RDMADevice::get_default_mr_access(),
+                                                           *RDMAUtil::RDMADevice::get_default_qp_init_attr());
+
+
+                    if (s != RDMAUtil::Enums::Status::Ok) {
+                        Debug::error(">> Failed to open RDMA device due to %s\n",
+                                     RDMAUtil::decode_rdma_status(s).c_str());
+                        return false;
+                    }
+
                     ctx->default_connect(sock);
+                    self_info.rdma_ctxs.push_back(std::move(ctx));
                 }
 
                 Debug::info("Waiting for income rdma request\n");
                 sleep(1);
             }
-        }, self_info.rdma_ctx.get());
+        });
 
         Debug::info("RDMA thread launched\n");
         return t;

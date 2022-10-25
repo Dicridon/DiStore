@@ -713,6 +713,7 @@ namespace DiStore::Cluster {
             auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(iter->forwards[0]->data_node,
                                                                            sizeof(LinkedNode16));
             data_layer_stats[buffer->type].push_back(buffer->usage());
+            iter = iter->forwards[0];
         }
 
         for (auto &[k, v] : data_layer_stats) {

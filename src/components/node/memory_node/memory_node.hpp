@@ -164,19 +164,19 @@ namespace DiStore::Cluster {
                 return false;
             }
 
-            auto [rdma_ctx, s] = rdma_dev->open(self_info.base_addr.get_as<void *>(),
-                                                self_info.cap, 1,
-                                                RDMAUtil::RDMADevice::get_default_mr_access(),
-                                                *RDMAUtil::RDMADevice::get_default_qp_init_attr());
-            if (s != RDMAUtil::Enums::Status::Ok) {
-                Debug::error(">> Failed to open RDMA device due to %s\n",
-                             RDMAUtil::decode_rdma_status(s).c_str());
-                return false;
-            }
-
+            // auto [rdma_ctx, s] = rdma_dev->open(self_info.base_addr.get_as<void *>(),
+            //                                     self_info.cap, 1,
+            //                                     RDMAUtil::RDMADevice::get_default_mr_access(),
+            //                                     *RDMAUtil::RDMADevice::get_default_qp_init_attr());
+            // if (s != RDMAUtil::Enums::Status::Ok) {
+            //     Debug::error(">> Failed to open RDMA device due to %s\n",
+            //                  RDMAUtil::decode_rdma_status(s).c_str());
+            //     return false;
+            // }
+            // 
             self_info.rdma_device = std::move(rdma_dev);
-            self_info.rdma_ctx = std::move(rdma_ctx);
-
+            // self_info.rdma_ctx = std::move(rdma_ctx);
+            // 
             auto uri = self_info.tcp_addr.to_uri(self_info.tcp_port);
             Debug::info("RDMA is initialized for memory node %s\n", uri.c_str());
             return true;

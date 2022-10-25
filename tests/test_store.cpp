@@ -40,10 +40,9 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     // start benching
     const size_t sample_batch = 1000;
     std::vector<std::thread> workers;
-    std::vector<std::vector<Stats::TimedLatency>> latencies;
+    workers.reserve(threads);
 
     std::mutex print_lock;
-    workers.reserve(threads);
 
     auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < threads; i++) {
@@ -81,8 +80,8 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                     return;
                 }
 
+                lat_stats.record_time();
                 if ((++local_counter) == local_batch) {
-                    lat_stats.record_time();
                     local_counter = 0;
 
                     if (++total_counter == sample_batch) {
