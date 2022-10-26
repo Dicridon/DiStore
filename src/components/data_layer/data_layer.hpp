@@ -63,9 +63,14 @@ namespace DiStore::DataLayer {
             return next < N;
         }
 
+        // uninsert, not upsert
         auto store(const std::string &key, const std::string &value) -> bool {
             if (!available()) {
                 return false;
+            }
+
+            if (find(key)) {
+                return true;
             }
 
             fingerprints[next] = (uint8_t)CityHash64(key.c_str(), key.size());

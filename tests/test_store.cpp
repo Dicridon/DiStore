@@ -25,8 +25,9 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     // guard.append(DataLayer::Constants::KEYLEN - guard.size(), 'x');
 
     auto ycsb = Workload::YCSBWorkload::make_ycsb_workload(total,
-                                                           total / 10 /* ensure skewness*/);
-    Debug::info("Populating");
+                                                           total / 10, /* ensure skewness*/
+                                                           Workload::YCSBWorkloadType::YCSB_A);
+    Debug::info("Populating\n");
     for (size_t i = 0; i < total / 10; i++) {
         auto k = std::to_string(i);
         k.insert(0, Workload::Constants::KEY_SIZE - k.size(), '0');
@@ -46,13 +47,17 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
 
     auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < threads; i++) {
-        workers.emplace_back([&]() {
+        workers.emplace_back([&](int tid) {
+            if (!node->register_thread()) {
+                Debug::error("Failed to register a thread\n");
+                return;
+            }
+
             auto total_counter = 0;
             const auto local_batch = 1000UL;
             auto local_counter = 0;
             Stats::TimedLatency lat_stats(sample_batch);
             for (size_t i = 0; i < total / threads; i++) {
-
                 auto op = ycsb->next();
                 switch (op.first) {
                 case Workload::YCSBOperation::Insert:
@@ -87,7 +92,7 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                     if (++total_counter == sample_batch) {
                         lat_stats.process();
                         std::stringstream ss;
-                        ss << "Current latency percentiles of thread " << i << ": "
+                        ss << "Current latency percentiles of thread " << tid << ": "
                            << "avg: " << lat_stats.avg() << " us, "
                            << "P50: " << lat_stats.p50() << " us, "
                            << "P90: " << lat_stats.p90() << " us, "
@@ -96,10 +101,11 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                         std::cout << ss.str();
                         print_lock.unlock();
                         total_counter = 0;
+                        lat_stats.reset();
                     }
                 }
             }
-        });
+        }, i);
     }
 
     for (auto &t : workers) {
@@ -208,7 +214,7 @@ auto main(int argc, char *argv[]) -> int {
             return -1;
         }
 
-        launch_compute(config.value(), memory_nodes.value(), threads.value());
+        launch_compute_ycsb(config.value(), memory_nodes.value(), threads.value());
     } else if (type == "memory") {
         if (!config.has_value()) {
             Debug::error("Please offer a configuration file to configure current node\n");

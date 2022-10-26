@@ -55,6 +55,7 @@ namespace DiStore::Cluster {
         auto register_thread() -> bool;
 
         auto put(const std::string &key, const std::string &value) -> bool;
+        auto put_unique(const std::string &key, const std::string &value) -> bool;
         auto get(const std::string &key) -> std::optional<std::string>;
         auto update(const std::string &key, const std::string &value) -> bool;
         auto remove(const std::string &key) -> bool;
