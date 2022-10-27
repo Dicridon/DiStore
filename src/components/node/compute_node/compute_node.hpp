@@ -54,12 +54,14 @@ namespace DiStore::Cluster {
         // must call this register_thread before threads actually do some stuff
         auto register_thread() -> bool;
 
-        auto put(const std::string &key, const std::string &value) -> bool;
-        auto put_unique(const std::string &key, const std::string &value) -> bool;
-        auto get(const std::string &key) -> std::optional<std::string>;
-        auto update(const std::string &key, const std::string &value) -> bool;
-        auto remove(const std::string &key) -> bool;
-        auto scan(const std::string &key, size_t count) -> std::vector<std::string>;
+        auto put(const std::string &key, const std::string &value, Stats::Breakdown *breakdown)
+            -> bool;
+        auto get(const std::string &key, Stats::Breakdown *breakdown) -> std::optional<std::string>;
+        auto update(const std::string &key, const std::string &value, Stats::Breakdown *breakdown)
+            -> bool;
+        auto remove(const std::string &key, Stats::Breakdown *breakdown) -> bool;
+        auto scan(const std::string &key, size_t count, Stats::Breakdown *breakdown)
+            -> std::vector<std::string>;
 
         // always return non-null pointer as long as remote memory is not depleted
         auto allocate(size_t size) -> RemotePointer;
@@ -159,18 +161,28 @@ namespace DiStore::Cluster {
         auto quick_put_pick_node(const std::string &key) -> DataLayer::LinkedNode10 *;
 
         auto put_dispatcher(SkipListNode *data_node, const std::string &key,
-                            const std::string &value) -> bool;
-        auto put10(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool;
-        auto put12(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool;
-        auto put14(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool;
-        auto put16(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool;
+                            const std::string &value, Stats::Breakdown *breakdown)
+            -> bool;
+        auto put10(SkipListNode *data_node, const std::string &key, const std::string &value,
+                   Stats::Breakdown *breakdown)
+            -> std::pair<bool, bool>;
+        auto put12(SkipListNode *data_node, const std::string &key, const std::string &value,
+                   Stats::Breakdown *breakdown)
+            -> std::pair<bool, bool>;
+        auto put14(SkipListNode *data_node, const std::string &key, const std::string &value,
+                   Stats::Breakdown *breakdown)
+            -> std::pair<bool, bool>;
+        auto put16(SkipListNode *data_node, const std::string &key, const std::string &value,
+                   Stats::Breakdown *breakdown)
+            -> std::pair<bool, bool>;
 
 
         // try to win the put and fetch remote memory to local
         // pair[0], win the competition
         // pair[1], pointer to winner's ConcurrencyContext
         template<typename NodeType>
-        auto try_win(SkipListNode *data_node, Concurrency::ConcurrencyContextType t)
+        auto try_win(SkipListNode *data_node, Concurrency::ConcurrencyContextType t,
+                     Stats::Breakdown *breakdown)
             -> std::pair<bool, Concurrency::ConcurrencyContext *>
         {
 
@@ -185,9 +197,10 @@ namespace DiStore::Cluster {
             if (data_node->ctx.compare_exchange_strong(expect, shared_ctx)) {
                 // the only winner should remember to collect pending requests
                 // first process winner's own request
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
                 auto buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
                                                                            sizeof(NodeType));
-
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
                 shared_ctx->user_context = buffer;
                 shared_ctx->max_depth = -1;
 
@@ -201,7 +214,8 @@ namespace DiStore::Cluster {
         // pair[1], toal number of all pending requests including current key-value
         template<typename NodeType>
         auto try_put_to_existing_node(Concurrency::ConcurrencyContext *shared_ctx, SkipListNode *data_node,
-                                      const std::string &key, const std::string &value)
+                                      const std::string &key, const std::string &value,
+                                      Stats::Breakdown *breakdown)
             -> std::pair<bool, size_t>
         {
             auto node_buffer = reinterpret_cast<NodeType *>(shared_ctx->user_context);
@@ -218,7 +232,10 @@ namespace DiStore::Cluster {
                 }
 
                 if (shared_ctx->requests.unsafe_size() == 0) {
-                    if(remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType))) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+                    auto ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);                    
+                    if(ret) {
                         return {true, 0};
                     } else {
                         Debug::error("Failed to write back to remote\n");
@@ -257,7 +274,8 @@ namespace DiStore::Cluster {
         }
 
         auto failed_write(Concurrency::ConcurrencyContext *cctx, const std::string &key,
-                          const std::string &value) -> bool;
+                          const std::string &value, Stats::Breakdown *breakdown)
+            -> std::pair<bool, bool>;
 
         auto eager_morph(SkipListNode *data_node, Concurrency::ConcurrencyContext *shared_ctx,
                          const std::string &key, const std::string &value, bool done) -> bool;

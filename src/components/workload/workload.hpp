@@ -164,7 +164,7 @@ namespace DiStore::Workload {
             auto k = std::to_string(load_generator->next_unrecorded());
             k.insert(0, Constants::KEY_SIZE - k.size(), '0');
 
-            auto op = op_generator->next();
+            auto op = op_generator->next_unrecorded();
 
             switch (type) {
             case YCSBWorkloadType::YCSB_A:

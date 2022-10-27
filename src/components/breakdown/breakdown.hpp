@@ -7,8 +7,7 @@
 #include <vector>
 #include <unordered_map>
 
-
-namespace DiStore::Stats::Breakdown {
+namespace DiStore::Stats {
     enum class DiStoreBreakdownOps {
         SearchLayerSearch,
         SearchLayerUpdate,
@@ -30,11 +29,14 @@ namespace DiStore::Stats::Breakdown {
             :batch(batch_size) {}
         ~Breakdown() = default;
 
-        auto begin(DiStoreBreakdownOps op) noexcept -> void {
+        inline auto begin(DiStoreBreakdownOps op) noexcept -> void {
+#ifdef __BREAKDOWN__
             spans[op].first = std::chrono::steady_clock::now();
+#endif
         }
 
-        auto end(DiStoreBreakdownOps op) noexcept -> void {
+        inline auto end(DiStoreBreakdownOps op) noexcept -> void {
+#ifdef __BREAKDOWN__
             auto pair = spans[op];
             pair.second = std::chrono::steady_clock::now();
 
@@ -46,9 +48,11 @@ namespace DiStore::Stats::Breakdown {
             if (tmp_arr.size() == batch) {
                 results[op].push_back(Misc::avg(tmp_arr));
             }
+#endif
         }
 
         auto report() noexcept -> void {
+#ifdef __BREAKDOWN__
             for (auto &k : ops_table) {
                 std::cout << ">> Breakdown " << decode_breakdown(k) << ": ";
                 auto &arr = results[k];
@@ -58,6 +62,13 @@ namespace DiStore::Stats::Breakdown {
                 std::cout << "p90: " << Misc::p90(arr) << ", ";
                 std::cout << "p99: " << Misc::p99(arr) << "\n";
             }
+#endif
+        }
+
+        auto clear() noexcept -> void {
+            results.clear();
+            tmp.clear();
+            spans.clear();
         }
     private:
         using SteadyTimePoint = std::chrono::time_point<std::chrono::steady_clock>;

@@ -62,23 +62,31 @@ namespace DiStore::Cluster {
         return true;
     }
 
-    auto ComputeNode::put(const std::string &key, const std::string &value) -> bool {
+    auto ComputeNode::put(const std::string &key, const std::string &value,
+                          Stats::Breakdown *breakdown)
+        -> bool
+    {
         if (!remote_put) {
             if (quick_put(key, value))
                 return true;
             // allow remote put
         }
 
+        breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
         auto data_node = slist.fuzzy_search(key);
+        breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
 
         if (!data_node) {
-            std::runtime_error("Impossible to get nullptr from slist since remote_put is enabled\n");
+            std::runtime_error("Impossible to get nullptr from"
+                               "slist since remote_put is enabled\n");
         }
 
-        return put_dispatcher(data_node, key, value);
+        return put_dispatcher(data_node, key, value, breakdown);
     }
 
-    auto ComputeNode::get(const std::string &key) -> std::optional<std::string> {
+    auto ComputeNode::get(const std::string &key, Stats::Breakdown *breakdown)
+        -> std::optional<std::string>
+    {
         if (!remote_put) {
             std::scoped_lock<std::mutex> _(local_mutex);
             if (!local_anchors[1].empty() && key >= local_anchors[1]) {
@@ -89,7 +97,9 @@ namespace DiStore::Cluster {
         }
 
     retry:
+        breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
         auto node = slist.fuzzy_search(key);
+        breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
 
         while(node->ctx)
             ;
@@ -98,8 +108,10 @@ namespace DiStore::Cluster {
 
         // we don't have to find the corrent fetch_as type since remote memory is completely
         // exposed to us
+        breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
         auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
                                                                        sizeof(LinkedNode16));
+        breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
 
         auto v = buffer->find(key);
         if (ver != node->version)
@@ -108,7 +120,11 @@ namespace DiStore::Cluster {
         return v;
     }
 
-    auto ComputeNode::update(const std::string &key, const std::string &value) -> bool {
+    auto ComputeNode::update(const std::string &key, const std::string &value,
+                             Stats::Breakdown *breakdown)
+        -> bool
+    {
+    retry:
         if (!remote_put) {
             std::scoped_lock<std::mutex> _(local_mutex);
             if (key > local_anchors[1]) {
@@ -118,7 +134,9 @@ namespace DiStore::Cluster {
             }
         }
 
+        breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
         auto node = slist.fuzzy_search(key);
+        breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
 
         if (node == nullptr)
             return false;
@@ -126,11 +144,15 @@ namespace DiStore::Cluster {
         // we don't have to find the corrent fetch_as type since remote memory is completely
         // exposed to us
 
-        auto [win, shared_ctx] = try_win<LinkedNode16>(node, Concurrency::ConcurrencyContextType::Update);
+        auto [win, shared_ctx] = try_win<LinkedNode16>(node,
+                                                       Concurrency::ConcurrencyContextType::Update,
+                                                       breakdown);
 
         if (win) {
+            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
             auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
                                                                            sizeof(LinkedNode16));
+            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
             shared_ctx->max_depth = -1;
 
             buffer->update(key, value);
@@ -148,7 +170,12 @@ namespace DiStore::Cluster {
             if (shared_ctx->type != Concurrency::ConcurrencyContextType::Update)
                 return false;
 
-            return failed_write(shared_ctx, key, value);
+            if (auto [stat, retry] = failed_write(shared_ctx, key, value, breakdown);
+                retry == false) {
+                goto retry;
+            } else {
+                return stat;
+            }
         }
 
         ++node->version;
@@ -268,18 +295,35 @@ namespace DiStore::Cluster {
     }
 
     auto ComputeNode::put_dispatcher(SkipListNode *data_node, const std::string &key,
-                                     const std::string &value)
+                                     const std::string &value, Stats::Breakdown *breakdown)
         -> bool
     {
+    retry:
         switch (data_node->type){
         case LinkedNodeType::Type10:
-            return put10(data_node, key, value);
+            if (auto [ret, retry] = put10(data_node, key, value, breakdown); retry == true) {
+                goto retry;
+            } else {
+                return ret;
+            }
         case LinkedNodeType::Type12:
-            return put12(data_node, key, value);
+            if (auto [ret, retry] = put12(data_node, key, value, breakdown); retry == true) {
+                goto retry;
+            } else {
+                return ret;
+            }
         case LinkedNodeType::Type14:
-            return put14(data_node, key, value);
+            if (auto [ret, retry] = put14(data_node, key, value, breakdown); retry == true) {
+                goto retry;
+            } else {
+                return ret;
+            }
         case LinkedNodeType::Type16:
-            return put16(data_node, key, value);
+            if (auto [ret, retry] = put16(data_node, key, value, breakdown); retry == true) {
+                goto retry;
+            } else {
+                return ret;
+            }
         default:
             /*
              * If we reach here, it's likely that a key smaller than any key in the
@@ -295,18 +339,25 @@ namespace DiStore::Cluster {
     }
 
     // 10 + 5 -> 16
-    auto ComputeNode::put10(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool {
+    auto ComputeNode::put10(SkipListNode *data_node, const std::string &key, const std::string &value,
+                            Stats::Breakdown *breakdown)
+        -> std::pair<bool, bool>
+    {
         bool ret = true;
         auto [win, shared_ctx] = try_win<LinkedNode10>(data_node,
-                                                       Concurrency::ConcurrencyContextType::Insert);
+                                                       Concurrency::ConcurrencyContextType::Insert,
+                                                       breakdown);
         if (!win) {
             if (shared_ctx->type != Concurrency::ConcurrencyContextType::Insert)
-                return false;
+                return {false, true};
 
-            return failed_write(shared_ctx, key, value);
+            return failed_write(shared_ctx, key, value, breakdown);
         }
 
-        auto [done, pendings] = try_put_to_existing_node<LinkedNode10>(shared_ctx, data_node, key, value);
+        auto [done, pendings] = try_put_to_existing_node<LinkedNode10>(shared_ctx,
+                                                                       data_node,
+                                                                       key, value,
+                                                                       breakdown);
 
         LinkedNode16 *real = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
         if (pendings == 0) {
@@ -323,11 +374,16 @@ namespace DiStore::Cluster {
                 req->is_done = true;
             }
 
+            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
             real->type = morph_node(real);
+            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
             auto real_size = DataLayer::sizeof_node(real->type);
             auto remote = allocate(real_size);
 
-            if (!remote_memory_allocator.write_to(remote, real_size)) {
+            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+            auto sta = remote_memory_allocator.write_to(remote, real_size);
+            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+            if (!sta) {
                 Debug::error("Failed to put morphed node to remote\n");
                 ret = false;
             }
@@ -344,39 +400,50 @@ namespace DiStore::Cluster {
         ++data_node->version;
         data_node->ctx.store(nullptr);
         shared_ctx->max_depth = 4;
-        return ret;
+        return {ret, false};
     }
 
     // 12 + 5 -> 10 + 10
-    auto ComputeNode::put12(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool {
+    auto ComputeNode::put12(SkipListNode *data_node, const std::string &key, const std::string &value,
+                            Stats::Breakdown *breakdown)
+        -> std::pair<bool, bool>
+    {
         bool ret = true;
 
         auto [win, shared_ctx] = try_win<LinkedNode12>(data_node,
-                                                       Concurrency::ConcurrencyContextType::Insert);
+                                                       Concurrency::ConcurrencyContextType::Insert,
+                                                       breakdown);
 
         if (!win) {
             if (shared_ctx->type != Concurrency::ConcurrencyContextType::Insert)
-                return false;
+                return {false, true};
 
-            return failed_write(shared_ctx, key, value);
+            return failed_write(shared_ctx, key, value, breakdown);
         }
 
-        auto [done, pendings] = try_put_to_existing_node<LinkedNode12>(shared_ctx, data_node, key, value);
+        auto [done, pendings] = try_put_to_existing_node<LinkedNode12>(shared_ctx, data_node, key, value, breakdown);
         if (pendings == 0) {
             ret = true;
         } else {
             // eager morphing to a Node16
             LinkedNode16 *real = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
             if (pendings <= 4) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
                 ret = eager_morph(data_node, shared_ctx, key, value, done);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
             } else {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
                 auto [left, right, ranchor] = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type10;
 
-                if (auto r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
-                    r.is_nullptr()) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                auto r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+
+                if (r.is_nullptr()) {
                     ret =  false;
                 } else {
                     // update_queue.push({ranchor, LinkedNodeType::Type10, r});
@@ -391,38 +458,52 @@ namespace DiStore::Cluster {
         ++data_node->version;
         data_node->ctx.store(nullptr);
         shared_ctx->max_depth = 4;
-        return ret;
+        return {ret, false};
     }
 
     // 14 + 5 -> 10 + 12
-    auto ComputeNode::put14(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool {
+    auto ComputeNode::put14(SkipListNode *data_node, const std::string &key, const std::string &value,
+                            Stats::Breakdown *breakdown)
+        -> std::pair<bool, bool>
+    {
         bool ret = true;
         auto [win, shared_ctx] = try_win<LinkedNode14>(data_node,
-                                                       Concurrency::ConcurrencyContextType::Insert);
+                                                       Concurrency::ConcurrencyContextType::Insert,
+                                                       breakdown);
 
         if (!win) {
             if (shared_ctx->type != Concurrency::ConcurrencyContextType::Insert)
-                return false;
+                return {false, true};
 
-            return failed_write(shared_ctx, key, value);
+            return failed_write(shared_ctx, key, value, breakdown);
         }
 
-        auto [done, pendings] = try_put_to_existing_node<LinkedNode14>(shared_ctx, data_node, key, value);
+        auto [done, pendings] = try_put_to_existing_node<LinkedNode14>(shared_ctx,
+                                                                       data_node,
+                                                                       key, value,
+                                                                       breakdown);
         if (pendings == 0) {
             ret =  true;
         } else {
             // eager morphing to a Node16
             LinkedNode16 *real = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
             if (pendings <= 2) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
                 ret = eager_morph(data_node, shared_ctx, key, value, done);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
             } else {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
                 auto [left, right, ranchor] = out_of_place_split_node(real, shared_ctx, 8, key, value, done);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type12;
 
-                if (auto r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
-                    r.is_nullptr()) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                auto r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+
+                if (r.is_nullptr()) {
                     ret = false;
                 } else {
                     // update_queue.push({ranchor, LinkedNodeType::Type12, r});
@@ -437,23 +518,30 @@ namespace DiStore::Cluster {
         ++data_node->version;
         data_node->ctx.store(nullptr);
         shared_ctx->max_depth = 4;
-        return ret;
+        return {ret, false};
     }
 
     // 16 + 5 -> 12 + 12
-    auto ComputeNode::put16(SkipListNode *data_node, const std::string &key, const std::string &value) -> bool {
+    auto ComputeNode::put16(SkipListNode *data_node, const std::string &key, const std::string &value,
+                            Stats::Breakdown *breakdown)
+        -> std::pair<bool, bool>
+    {
         bool ret = true;
         auto [win, shared_ctx] = try_win<LinkedNode16>(data_node,
-                                                       Concurrency::ConcurrencyContextType::Insert);
+                                                       Concurrency::ConcurrencyContextType::Insert,
+                                                       breakdown);
 
         if (!win) {
             if (shared_ctx->type != Concurrency::ConcurrencyContextType::Insert)
-                return false;
+                return {false, true};
 
-            return failed_write(shared_ctx, key, value);
+            return failed_write(shared_ctx, key, value, breakdown);
         }
 
-        auto [done, pendings] = try_put_to_existing_node<LinkedNode16>(shared_ctx, data_node, key, value);
+        auto [done, pendings] = try_put_to_existing_node<LinkedNode16>(shared_ctx,
+                                                                       data_node,
+                                                                       key, value,
+                                                                       breakdown);
         if (pendings == 0) {
             ret = true;
         } else {
@@ -462,26 +550,38 @@ namespace DiStore::Cluster {
             LinkedNode16 *right, *left;
             RemotePointer r;
             if (pendings <= 2) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
                 std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type10;
 
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
                 r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
             } else if(pendings <= 4) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
                 std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type12;
 
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
                 r = write_back_two<LinkedNode10, LinkedNode12>(data_node, left, right);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
             } else {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
                 std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 10, key, value, done);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
 
                 left->type = LinkedNodeType::Type12;
                 right->type = LinkedNodeType::Type12;
 
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
                 r = write_back_two<LinkedNode12, LinkedNode12>(data_node, left, right);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
             }
 
             if (r.is_nullptr())
@@ -496,15 +596,17 @@ namespace DiStore::Cluster {
         ++data_node->version;
         data_node->ctx.store(nullptr);
         shared_ctx->max_depth = 4;
-        return ret;
+        return {ret, false};
     }
 
     auto ComputeNode::failed_write(Concurrency::ConcurrencyContext *cctx,
-                                   const std::string &key, const std::string &value)
-        -> bool
+                                   const std::string &key, const std::string &value,
+                                   Stats::Breakdown *breakdown)
+        -> std::pair<bool, bool>
     {
         auto depth = cctx->max_depth.fetch_sub(1);
         if (depth > 0) {
+            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerContention);
             auto req = new Concurrency::ConcurrencyRequests;
             req->tag = &key;
             req->content = &value;
@@ -512,14 +614,12 @@ namespace DiStore::Cluster {
 
             while (!req->is_done)
                 ;
-
-            return req->succeed;
+            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerContention);
+            return {req->succeed, false};
         } else {
             // competition failed, should retry
-            return false;
+            return {false, true};
         }
-
-        return true;
     }
 
     auto ComputeNode::eager_morph(SkipListNode *data_node,

@@ -27,16 +27,18 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     auto ycsb = Workload::YCSBWorkload::make_ycsb_workload(total,
                                                            total / 10, /* ensure skewness*/
                                                            Workload::YCSBWorkloadType::YCSB_A);
+    Stats::Breakdown b(1000000);
     Debug::info("Populating\n");
     for (size_t i = 0; i < total / 10; i++) {
         auto k = std::to_string(i);
         k.insert(0, Workload::Constants::KEY_SIZE - k.size(), '0');
 
-        if (!node->put(k, k)) {
+        if (!node->put(k, k, &b)) {
             Debug::error("Putting key %s failed\n", k.c_str());
             return;
         }
     }
+    b.clear();
 
     // start benching
     const size_t sample_batch = 1000;
@@ -56,24 +58,27 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
             auto total_counter = 0;
             const auto local_batch = 1000UL;
             auto local_counter = 0;
+
+            Stats::Breakdown breakdown(sample_batch);
             Stats::TimedLatency lat_stats(sample_batch);
+
             for (size_t i = 0; i < total / threads; i++) {
                 auto op = ycsb->next();
                 switch (op.first) {
                 case Workload::YCSBOperation::Insert:
-                    if (!node->put(op.second, op.second)) {
+                    if (!node->put(op.second, op.second, &breakdown)) {
                         Debug::error("Putting %s failed\n", op.second.c_str());
                         return;
                     }
                     break;
                 case Workload::YCSBOperation::Update:
-                    if (!node->update(op.second, op.second)) {
+                    if (!node->update(op.second, op.second, &breakdown)) {
                         Debug::error("Updating %s failed\n", op.second.c_str());
                         return;
                     }
                     break;
                 case Workload::YCSBOperation::Search:
-                    if (auto v = node->get(op.second); !v.has_value()) {
+                    if (auto v = node->get(op.second, &breakdown); !v.has_value()) {
                         Debug::error("Searching %s failed\n", op.second.c_str());
                         return;
                     }
@@ -99,12 +104,14 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                            << "P99: " << lat_stats.p99() << " us\n";
                         print_lock.lock();
                         std::cout << ss.str();
+                        breakdown.report();
                         print_lock.unlock();
                         total_counter = 0;
                         lat_stats.reset();
                     }
                 }
             }
+
         }, i);
     }
 
@@ -137,12 +144,13 @@ auto launch_compute(const std::string &config, const std::string &memory_nodes, 
     auto total = 10000000UL;
     auto guard = std::to_string(0);
     // guard.append(DataLayer::Constants::KEYLEN - guard.size(), '0');
+    Stats::Breakdown breakdown(1000);
     std::cout << "Populating\n";
     for (size_t i = 0; i < total; i++) {
         auto k = std::to_string(total + i);
         k.insert(0, DataLayer::Constants::KEYLEN - k.size(), '0');
 
-        if (!node->put(k, k)) {
+        if (!node->put(k, k, &breakdown)) {
             Debug::error("Failed to insert %s\n", k.c_str());
             return;
         }
@@ -152,7 +160,7 @@ auto launch_compute(const std::string &config, const std::string &memory_nodes, 
     for (size_t i = 0; i < total; i++) {
         auto k = std::to_string(total + i);
         k.append(DataLayer::Constants::KEYLEN - k.size(), '0');
-        auto r = node->get(k);
+        auto r = node->get(k, &breakdown);
         if (!r.has_value()) {
             std::cout << k << " is missing\n";
             std::cout << "Double checking failed\n";
@@ -164,12 +172,13 @@ auto launch_compute(const std::string &config, const std::string &memory_nodes, 
     for (size_t i = 0; i < total; i++) {
         auto k = std::to_string(total + i);
         k.append(DataLayer::Constants::KEYLEN - k.size(), '0');
-        if (!node->update(k, k)) {
+        if (!node->update(k, k, &breakdown)) {
             std::cout << "Updaing " << k << " failed\n";
             break;
         }
     }
 
+    breakdown.report();
     std::cout << "Validation passed, good job\n";
 }
 
