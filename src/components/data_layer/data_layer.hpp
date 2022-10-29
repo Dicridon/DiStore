@@ -104,7 +104,7 @@ namespace DiStore::DataLayer {
                     continue;
 
                 // fuck the type conversion
-                if (key.compare(0, key.size(), (char *)&pairs[i].key[0]) == 0) {
+                if (key.compare(0, key.size(), (char *)&pairs[i].key[0], key.size()) == 0) {
                     memcpy(pairs[i].value, value.c_str(), value.size());
                     return true;
                 }

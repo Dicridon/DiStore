@@ -164,13 +164,12 @@ namespace DiStore::Cluster {
         if (node == nullptr)
             return false;
 
+        auto ret = true;
         // we don't have to find the corrent fetch_as type since remote memory is completely
         // exposed to us
-
         auto [win, shared_ctx] = try_win<LinkedNode16>(node,
                                                        Concurrency::ConcurrencyContextType::Update,
                                                        breakdown);
-
         if (win) {
             LinkedNode16 *buffer = nullptr;
             if (breakdown) {
@@ -184,13 +183,21 @@ namespace DiStore::Cluster {
             }
             shared_ctx->max_depth = -1;
 
-            buffer->update(key, value);
+            ret = buffer->update(key, value);
 
             Concurrency::ConcurrencyRequests *req;
             while(shared_ctx->requests.try_pop(req)) {
                 req->succeed = buffer->update(*reinterpret_cast<const std::string *>(req->tag),
                                               *reinterpret_cast<const std::string *>(req->content));
                 req->is_done = true;
+            }
+
+            if (breakdown) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+                remote_memory_allocator.write_to(node->data_node, DataLayer::sizeof_node(buffer->type));
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+            } else {
+                remote_memory_allocator.write_to(node->data_node, DataLayer::sizeof_node(buffer->type));
             }
 
             node->ctx = nullptr;
@@ -208,7 +215,7 @@ namespace DiStore::Cluster {
         }
 
         ++node->version;
-        return true;
+        return ret;
     }
 
     auto ComputeNode::allocate(size_t size) -> RemotePointer {
