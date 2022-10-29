@@ -5,6 +5,7 @@
 #define __INFO__
 #define __STATS__
 #define __BREAKDOWN__
+#define __HUGE_PAGE__
 namespace DiStore {
     namespace Config {
 

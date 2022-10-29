@@ -85,7 +85,7 @@ namespace DiStore::Stats {
             if (processed)
                 return true;
 
-            if (data.size() <= batch) {
+            if (data.size() < batch) {
                 return false;
             }
 

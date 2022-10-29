@@ -7,6 +7,8 @@
 #include "misc/misc.hpp"
 #include "debug/debug.hpp"
 
+#include <sys/mman.h>
+
 namespace DiStore::Cluster {
     using namespace RPCWrapper;
     class MemoryNode {
@@ -109,7 +111,18 @@ namespace DiStore::Cluster {
             }
 
             auto cap = atoll(vmem[1].str().c_str());
+#ifdef __HUGE_PAGE__
+            auto mem = (Memory::byte_ptr_t)mmap(nullptr, cap, PROT_READ | PROT_WRITE,
+                                                MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB,
+                                                -1, 0);
+
+            if (mem == MAP_FAILED) {
+                Debug::error("Failed to mmap huge page, using malloc instead\n");
+                mem = new Memory::byte_t[cap];
+            }
+#else
             auto mem = new Memory::byte_t[cap];
+#endif
             auto off = Memory::Constants::MEMORY_PAGE_SIZE;
 
             self_info.cap = cap - off;

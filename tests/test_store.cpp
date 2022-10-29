@@ -56,32 +56,35 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
             }
 
             auto total_counter = 0;
-            const auto local_batch = 1000UL;
-            auto local_counter = 0;
 
             Stats::Breakdown breakdown(sample_batch);
-            Stats::TimedLatency lat_stats(sample_batch);
 
             for (size_t i = 0; i < total / threads; i++) {
                 auto op = ycsb->next();
                 switch (op.first) {
                 case Workload::YCSBOperation::Insert:
+                    breakdown.begin(Stats::DiStoreBreakdownOps::Put);
                     if (!node->put(op.second, op.second, &breakdown)) {
                         Debug::error("Putting %s failed\n", op.second.c_str());
                         return;
                     }
+                    breakdown.end(Stats::DiStoreBreakdownOps::Put);
                     break;
                 case Workload::YCSBOperation::Update:
+                    breakdown.begin(Stats::DiStoreBreakdownOps::Update);
                     if (!node->update(op.second, op.second, &breakdown)) {
                         Debug::error("Updating %s failed\n", op.second.c_str());
                         return;
                     }
+                    breakdown.end(Stats::DiStoreBreakdownOps::Update);
                     break;
                 case Workload::YCSBOperation::Search:
+                    breakdown.begin(Stats::DiStoreBreakdownOps::Get);
                     if (auto v = node->get(op.second, &breakdown); !v.has_value()) {
                         Debug::error("Searching %s failed\n", op.second.c_str());
                         return;
                     }
+                    breakdown.end(Stats::DiStoreBreakdownOps::Get);
                     break;
                 case Workload::YCSBOperation::Scan:
                     return;
@@ -90,25 +93,13 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                     return;
                 }
 
-                lat_stats.record_time();
-                if ((++local_counter) == local_batch) {
-                    local_counter = 0;
-
-                    if (++total_counter == sample_batch) {
-                        lat_stats.process();
-                        std::stringstream ss;
-                        ss << "Current latency percentiles of thread " << tid << ": "
-                           << "avg: " << lat_stats.avg() << " us, "
-                           << "P50: " << lat_stats.p50() << " us, "
-                           << "P90: " << lat_stats.p90() << " us, "
-                           << "P99: " << lat_stats.p99() << " us\n";
-                        print_lock.lock();
-                        std::cout << ss.str();
-                        breakdown.report();
-                        print_lock.unlock();
-                        total_counter = 0;
-                        lat_stats.reset();
-                    }
+                if (++total_counter == sample_batch) {
+                    print_lock.lock();
+                    std::cout << "Thread " << tid << " reporting\n";
+                    breakdown.report();
+                    print_lock.unlock();
+                    total_counter = 0;
+                    breakdown.clear();
                 }
             }
 

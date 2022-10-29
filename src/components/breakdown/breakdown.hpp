@@ -21,6 +21,12 @@ namespace DiStore::Stats {
 
         MemoryAllocation,
         RemoteMemoryAllocation,
+
+        Put,
+        Get,
+        Update,
+        Scan,
+        Delete,
     };
 
     class Breakdown {
@@ -47,6 +53,7 @@ namespace DiStore::Stats {
 
             if (tmp_arr.size() == batch) {
                 results[op].push_back(Misc::avg(tmp_arr));
+                tmp_arr.clear();
             }
 #endif
         }
@@ -57,18 +64,19 @@ namespace DiStore::Stats {
                 std::cout << ">> Breakdown " << decode_breakdown(k) << ": ";
                 auto &arr = results[k];
                 std::sort(arr.begin(), arr.end(), std::greater<>());
-                std::cout << "avg: " << Misc::avg(arr) << ", ";
-                std::cout << "p50: " << Misc::p50(arr) << ", ";
-                std::cout << "p90: " << Misc::p90(arr) << ", ";
-                std::cout << "p99: " << Misc::p99(arr) << "\n";
+                std::cout << "avg: " << Misc::avg(arr) << "ns, ";
+                std::cout << "p50: " << Misc::p50(arr) << "ns, ";
+                std::cout << "p90: " << Misc::p90(arr) << "ns, ";
+                std::cout << "p99: " << Misc::p99(arr) << "ns\n";
             }
 #endif
         }
 
         auto clear() noexcept -> void {
-            results.clear();
-            tmp.clear();
-            spans.clear();
+            for (auto &k : ops_table) {
+                results[k].clear();
+                tmp[k].clear();
+            }
         }
     private:
         using SteadyTimePoint = std::chrono::time_point<std::chrono::steady_clock>;
@@ -86,7 +94,13 @@ namespace DiStore::Stats {
             DiStoreBreakdownOps::DataLayerContention,
 
             DiStoreBreakdownOps::MemoryAllocation,
-            DiStoreBreakdownOps::RemoteMemoryAllocation
+            DiStoreBreakdownOps::RemoteMemoryAllocation,
+
+            DiStoreBreakdownOps::Put,
+            DiStoreBreakdownOps::Get,
+            DiStoreBreakdownOps::Update,
+            DiStoreBreakdownOps::Scan,
+            DiStoreBreakdownOps::Delete,
         };
 
         const size_t batch;
@@ -116,6 +130,16 @@ namespace DiStore::Stats {
                 return "MemoryAllocation";
             case DiStoreBreakdownOps::RemoteMemoryAllocation:
                 return "RemoteMemoryAllocation";
+            case DiStoreBreakdownOps::Put:
+                return "Put";
+            case DiStoreBreakdownOps::Get:
+                return "Get";
+            case DiStoreBreakdownOps::Update:
+                return "Update";
+            case DiStoreBreakdownOps::Scan:
+                return "Scan";
+            case DiStoreBreakdownOps::Delete:
+                return "Delete";
             default:
                 return "Unknwon";
             }

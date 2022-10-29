@@ -4,6 +4,7 @@
 ./tests/test_remote_memory.cpp: ./src/components/memory/compute_node/compute_node.hpp
 ./tests/test_memory_compute_node.cpp: ./src/components/memory/compute_node/compute_node.hpp
 ./tests/test_async_update.cpp: ./src/components/data_layer/data_layer.hpp ./src/components/search_layer/search_layer.hpp ./src/components/node/compute_node/compute_node.hpp
+./tests/test_rdma_tail.cpp: ./src/components/rdma_util/rdma_util.hpp ./src/components/debug/debug.hpp ./src/components/misc/misc.hpp ./src/components/memory/memory.hpp ./src/components/cmd_parser/cmd_parser.hpp ./src/components/stats/stats.hpp
 ./tests/test_rdma.cpp: ./src/components/rdma_util/rdma_util.hpp ./src/components/cmd_parser/cmd_parser.hpp ./src/components/misc/misc.hpp
 ./tests/test_store.cpp: ./src/components/node/memory_node/memory_node.hpp ./src/components/node/compute_node/compute_node.hpp ./src/components/cmd_parser/cmd_parser.hpp ./src/components/workload/workload.hpp ./src/components/stats/stats.hpp
 ./tests/test_node.cpp: ./src/components/node/node.hpp
