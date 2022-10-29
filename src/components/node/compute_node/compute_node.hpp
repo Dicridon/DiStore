@@ -157,6 +157,7 @@ namespace DiStore::Cluster {
             return true;
         }
 
+        auto drain_pending() -> void;
         auto quick_put(const std::string &key, const std::string &value) -> bool;
         auto quick_put_pick_node(const std::string &key) -> DataLayer::LinkedNode10 *;
 
@@ -194,6 +195,7 @@ namespace DiStore::Cluster {
             Concurrency::ConcurrencyContext *expect = nullptr;
             auto shared_ctx = thread_cctx->second.get();
             shared_ctx->type = t;
+
             if (data_node->ctx.compare_exchange_strong(expect, shared_ctx)) {
                 // the only winner should remember to collect pending requests
                 // first process winner's own request
@@ -234,6 +236,10 @@ namespace DiStore::Cluster {
                     if (!s) {
                         shared_ctx->requests.push(req);
                         break;
+                    } else {
+                        req->succeed = s;
+                        req->retry = false;
+                        req->is_done = true;
                     }
                 }
 
@@ -326,9 +332,10 @@ namespace DiStore::Cluster {
         auto inplace_split_node(LinkedNode16 *source_buffer, size_t left_cap)
             -> std::tuple<LinkedNode16 *, LinkedNode16 *, std::string>;
 
-        auto out_of_place_split_node(LinkedNode16 *source_buffer, Concurrency::ConcurrencyContext *shared_ctx,
-                                     size_t left_cap, const std::string &key, const std::string &value,
-                                     bool done)
+        auto out_of_place_split_node(LinkedNode16 *source_buffer,
+                                     Concurrency::ConcurrencyContext *shared_ctx,
+                                     size_t left_cap, const std::string &key,
+                                     const std::string &value, bool done)
             -> std::tuple<LinkedNode16 *, LinkedNode16 *, std::string>;
 
         // return the address of newly allocated right

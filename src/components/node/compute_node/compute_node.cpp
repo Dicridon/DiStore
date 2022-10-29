@@ -103,6 +103,10 @@ namespace DiStore::Cluster {
         }
 
     retry:
+
+        // drain pending requests that the last operation hasn't processed
+        drain_pending();
+
         SkipListNode *node = nullptr;
 
         if (breakdown) {
@@ -165,30 +169,22 @@ namespace DiStore::Cluster {
             return false;
 
         auto ret = true;
+
+        drain_pending();
         // we don't have to find the corrent fetch_as type since remote memory is completely
         // exposed to us
         auto [win, shared_ctx] = try_win<LinkedNode16>(node,
                                                        Concurrency::ConcurrencyContextType::Update,
                                                        breakdown);
         if (win) {
-            LinkedNode16 *buffer = nullptr;
-            if (breakdown) {
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
-                buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
-                                                                               sizeof(LinkedNode16));
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
-            } else {
-                buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
-                                                                               sizeof(LinkedNode16));
-            }
-            shared_ctx->max_depth = -1;
-
+            LinkedNode16 *buffer = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
             ret = buffer->update(key, value);
 
             Concurrency::ConcurrencyRequests *req;
             while(shared_ctx->requests.try_pop(req)) {
                 req->succeed = buffer->update(*reinterpret_cast<const std::string *>(req->tag),
                                               *reinterpret_cast<const std::string *>(req->content));
+                req->retry = false;
                 req->is_done = true;
             }
 
@@ -207,7 +203,7 @@ namespace DiStore::Cluster {
                 return false;
 
             if (auto [stat, retry] = failed_write(shared_ctx, key, value, breakdown);
-                retry == false) {
+                retry == true) {
                 goto retry;
             } else {
                 return stat;
@@ -233,6 +229,17 @@ namespace DiStore::Cluster {
 
     auto ComputeNode::free(RemotePointer p)  -> void {
         allocator.free(p);
+    }
+
+    auto ComputeNode::drain_pending() -> void {
+        auto thread_cctx = cctx.find(std::this_thread::get_id());
+        auto shared_ctx = thread_cctx->second.get();
+        Concurrency::ConcurrencyRequests *req;
+        while (shared_ctx->requests.try_pop(req)) {
+            req->succeed = false;
+            req->retry = true;
+            req->is_done = true;
+        }
     }
 
     auto ComputeNode::quick_put(const std::string &key, const std::string &value) -> bool {
@@ -380,6 +387,7 @@ namespace DiStore::Cluster {
         -> std::pair<bool, bool>
     {
         bool ret = true;
+        drain_pending();
         auto [win, shared_ctx] = try_win<LinkedNode10>(data_node,
                                                        Concurrency::ConcurrencyContextType::Insert,
                                                        breakdown);
@@ -407,6 +415,7 @@ namespace DiStore::Cluster {
                 // space is guaranteed to be sufficient
                 req->succeed = real->store(*reinterpret_cast<const std::string *>(req->tag),
                                            *reinterpret_cast<const std::string *>(req->content));
+                req->retry = false;
                 req->is_done = true;
             }
 
@@ -455,7 +464,7 @@ namespace DiStore::Cluster {
         -> std::pair<bool, bool>
     {
         bool ret = true;
-
+        drain_pending();
         auto [win, shared_ctx] = try_win<LinkedNode12>(data_node,
                                                        Concurrency::ConcurrencyContextType::Insert,
                                                        breakdown);
@@ -467,7 +476,8 @@ namespace DiStore::Cluster {
             return failed_write(shared_ctx, key, value, breakdown);
         }
 
-        auto [done, pendings] = try_put_to_existing_node<LinkedNode12>(shared_ctx, data_node, key, value, breakdown);
+        auto [done, pendings] = try_put_to_existing_node<LinkedNode12>(shared_ctx, data_node, key,
+                                                                       value, breakdown);
         if (pendings == 0) {
             ret = true;
         } else {
@@ -487,10 +497,12 @@ namespace DiStore::Cluster {
 
                 if (breakdown) {
                     breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
-                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9,
+                                                                             key, value, done);
                     breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
                 } else {
-                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9,
+                                                                             key, value, done);
                 }
 
                 left->type = LinkedNodeType::Type10;
@@ -529,6 +541,7 @@ namespace DiStore::Cluster {
         -> std::pair<bool, bool>
     {
         bool ret = true;
+        drain_pending();
         auto [win, shared_ctx] = try_win<LinkedNode14>(data_node,
                                                        Concurrency::ConcurrencyContextType::Insert,
                                                        breakdown);
@@ -563,10 +576,12 @@ namespace DiStore::Cluster {
 
                 if (breakdown) {
                     breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
-                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 8, key, value, done);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 8,
+                                                                             key, value, done);
                     breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
                 } else {
-                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 8, key, value, done);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 8,
+                                                                             key, value, done);
                 }
 
                 left->type = LinkedNodeType::Type10;
@@ -605,6 +620,7 @@ namespace DiStore::Cluster {
         -> std::pair<bool, bool>
     {
         bool ret = true;
+        drain_pending();
         auto [win, shared_ctx] = try_win<LinkedNode16>(data_node,
                                                        Concurrency::ConcurrencyContextType::Insert,
                                                        breakdown);
@@ -728,7 +744,7 @@ namespace DiStore::Cluster {
             if (breakdown) {
                 breakdown->end(Stats::DiStoreBreakdownOps::DataLayerContention);
             }
-            return {req->succeed, false};
+            return {req->succeed, req->retry};
         } else {
             // competition failed, should retry
             return {false, true};
@@ -752,6 +768,7 @@ namespace DiStore::Cluster {
             // space is guaranteed to be sufficient
             req->succeed = real->store(*reinterpret_cast<const std::string *>(req->tag),
                                        *reinterpret_cast<const std::string *>(req->content));
+            req->retry = false;
             req->is_done = true;
         }
 
@@ -834,6 +851,7 @@ namespace DiStore::Cluster {
             // space is guaranteed to be sufficient
             req->succeed = tmp_node.store(*reinterpret_cast<const std::string *>(req->tag),
                                           *reinterpret_cast<const std::string *>(req->content));
+            req->retry = false;
             req->is_done = true;
         }
 

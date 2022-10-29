@@ -96,7 +96,7 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                     return;
                 }
 
-                if (++total_counter == sample_batch) {
+                if (++total_counter == sample_batch * 100) {
                     print_lock.lock();
                     std::cout << "Thread " << tid << " reporting\n";
                     breakdown.report();
@@ -220,6 +220,7 @@ auto main(int argc, char *argv[]) -> int {
             Debug::error("Please offer a configuration file about the memory nodes\n");
             return -1;
         }
+
         Workload::YCSBWorkloadType workload_type;
         if (workload == "A") {
             workload_type = Workload::YCSBWorkloadType::YCSB_A;
@@ -233,6 +234,10 @@ auto main(int argc, char *argv[]) -> int {
             Debug::error("Other YCSB workloads are not supported\n");
             return -1;
         }
+
+        Debug::info("Running %d-thread benchmark YCSB %s with %lu operations\n",
+                    threads, workload.c_str(), total);
+
         launch_compute_ycsb(config.value(), memory_nodes.value(), threads, workload_type);
     } else if (type == "memory") {
         if (!config.has_value()) {
