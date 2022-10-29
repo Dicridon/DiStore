@@ -7,7 +7,11 @@
 
 using namespace CmdParser;
 using namespace DiStore;
-auto launch_compute_ycsb(const std::string &config, const std::string &memory_nodes, int threads) -> void {
+
+size_t total = 0;
+
+auto launch_compute_ycsb(const std::string &config, const std::string &memory_nodes,
+                         int threads, Workload::YCSBWorkloadType workload_type) -> void {
     auto node = Cluster::ComputeNode::make_compute_node(config, memory_nodes);
 
     if (node == nullptr) {
@@ -20,13 +24,12 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
         return;
     }
 
-    auto total = 10000000UL;
     auto guard = std::to_string(0);
     // guard.append(DataLayer::Constants::KEYLEN - guard.size(), 'x');
 
     auto ycsb = Workload::YCSBWorkload::make_ycsb_workload(total,
                                                            total / 10, /* ensure skewness*/
-                                                           Workload::YCSBWorkloadType::YCSB_A);
+                                                           workload_type);
     Stats::Breakdown b(1000000);
     Debug::info("Populating\n");
     for (size_t i = 0; i < total / 10; i++) {
@@ -195,13 +198,17 @@ auto main(int argc, char *argv[]) -> int {
     parser.add_option("--config", "-c");
     parser.add_option("--memory_nodes", "-m");
     parser.add_option<int>("--threads", "-T", 1);
+    parser.add_option<size_t>("--size", "-s", 10000000);
+    parser.add_option<std::string>("--workload", "-w", "C");
 
     parser.parse(argc, argv);
 
     auto type = parser.get_as<std::string>("--type");
     auto config = parser.get_as<std::string>("--config");
     auto memory_nodes = parser.get_as<std::string>("--memory_nodes");
-    auto threads = parser.get_as<int>("--threads");
+    auto threads = parser.get_as<int>("--threads").value();
+    total = parser.get_as<size_t>("--size").value();
+    auto workload = parser.get_as<std::string>("--workload").value();
 
     if (type == "compute") {
         if (!config.has_value()) {
@@ -213,8 +220,20 @@ auto main(int argc, char *argv[]) -> int {
             Debug::error("Please offer a configuration file about the memory nodes\n");
             return -1;
         }
-
-        launch_compute_ycsb(config.value(), memory_nodes.value(), threads.value());
+        Workload::YCSBWorkloadType workload_type;
+        if (workload == "A") {
+            workload_type = Workload::YCSBWorkloadType::YCSB_A;
+        } else if (workload == "B") {
+            workload_type = Workload::YCSBWorkloadType::YCSB_B;
+        } else if (workload == "C") {
+            workload_type = Workload::YCSBWorkloadType::YCSB_C;
+        } else if (workload == "L") {
+            workload_type = Workload::YCSBWorkloadType::YCSB_L;
+        } else {
+            Debug::error("Other YCSB workloads are not supported\n");
+            return -1;
+        }
+        launch_compute_ycsb(config.value(), memory_nodes.value(), threads, workload_type);
     } else if (type == "memory") {
         if (!config.has_value()) {
             Debug::error("Please offer a configuration file to configure current node\n");

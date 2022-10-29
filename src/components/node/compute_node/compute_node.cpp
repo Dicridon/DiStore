@@ -72,9 +72,15 @@ namespace DiStore::Cluster {
             // allow remote put
         }
 
-        breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
-        auto data_node = slist.fuzzy_search(key);
-        breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+        SkipListNode *data_node = nullptr;
+        // Compiler will eliminate this branch if nullptr of breakdown is given
+        if (breakdown) {
+            breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+            data_node = slist.fuzzy_search(key);
+            breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+        } else {
+            data_node = slist.fuzzy_search(key);
+        }
 
         if (!data_node) {
             std::runtime_error("Impossible to get nullptr from"
@@ -97,9 +103,15 @@ namespace DiStore::Cluster {
         }
 
     retry:
-        breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
-        auto node = slist.fuzzy_search(key);
-        breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+        SkipListNode *node = nullptr;
+
+        if (breakdown) {
+            breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+            node = slist.fuzzy_search(key);
+            breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+        } else {
+            node = slist.fuzzy_search(key);
+        }
 
         while(node->ctx)
             ;
@@ -108,10 +120,16 @@ namespace DiStore::Cluster {
 
         // we don't have to find the corrent fetch_as type since remote memory is completely
         // exposed to us
-        breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
-        auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
-                                                                       sizeof(LinkedNode16));
-        breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
+        LinkedNode16 *buffer = nullptr;
+        if (breakdown) {
+            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
+            buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
+                                                                      sizeof(LinkedNode16));
+            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
+        } else {
+            buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
+                                                                      sizeof(LinkedNode16));
+        }
 
         auto v = buffer->find(key);
         if (ver != node->version)
@@ -134,9 +152,14 @@ namespace DiStore::Cluster {
             }
         }
 
-        breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
-        auto node = slist.fuzzy_search(key);
-        breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+        SkipListNode *node = nullptr;
+        if (breakdown) {
+            breakdown->begin(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+            node = slist.fuzzy_search(key);
+            breakdown->end(Stats::DiStoreBreakdownOps::SearchLayerSearch);
+        } else {
+            node = slist.fuzzy_search(key);
+        }
 
         if (node == nullptr)
             return false;
@@ -149,10 +172,16 @@ namespace DiStore::Cluster {
                                                        breakdown);
 
         if (win) {
-            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
-            auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
-                                                                           sizeof(LinkedNode16));
-            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
+            LinkedNode16 *buffer = nullptr;
+            if (breakdown) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
+                buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
+                                                                               sizeof(LinkedNode16));
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
+            } else {
+                buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(node->data_node,
+                                                                               sizeof(LinkedNode16));
+            }
             shared_ctx->max_depth = -1;
 
             buffer->update(key, value);
@@ -374,15 +403,25 @@ namespace DiStore::Cluster {
                 req->is_done = true;
             }
 
-            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
-            real->type = morph_node(real);
-            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
+            if (breakdown) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
+                real->type = morph_node(real);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
+            } else {
+                real->type = morph_node(real);
+            }
             auto real_size = DataLayer::sizeof_node(real->type);
             auto remote = allocate(real_size);
 
-            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
-            auto sta = remote_memory_allocator.write_to(remote, real_size);
-            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+            bool sta = false;
+            if (breakdown) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+                sta = remote_memory_allocator.write_to(remote, real_size);
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+            } else {
+                sta = remote_memory_allocator.write_to(remote, real_size);
+            }
+
             if (!sta) {
                 Debug::error("Failed to put morphed node to remote\n");
                 ret = false;
@@ -428,20 +467,36 @@ namespace DiStore::Cluster {
             // eager morphing to a Node16
             LinkedNode16 *real = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
             if (pendings <= 4) {
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
-                ret = eager_morph(data_node, shared_ctx, key, value, done);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
+                    ret = eager_morph(data_node, shared_ctx, key, value, done);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
+                } else {
+                    ret = eager_morph(data_node, shared_ctx, key, value, done);
+                }
             } else {
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
-                auto [left, right, ranchor] = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                LinkedNode16 *left = nullptr, *right = nullptr;
+                std::string ranchor;
+
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                } else {
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
+                }
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type10;
 
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
-                auto r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                RemotePointer r;
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                    r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                } else {
+                    r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                }
 
                 if (r.is_nullptr()) {
                     ret =  false;
@@ -488,20 +543,36 @@ namespace DiStore::Cluster {
             // eager morphing to a Node16
             LinkedNode16 *real = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
             if (pendings <= 2) {
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
-                ret = eager_morph(data_node, shared_ctx, key, value, done);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerMorph);
+                    ret = eager_morph(data_node, shared_ctx, key, value, done);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerMorph);
+                } else {
+                    ret = eager_morph(data_node, shared_ctx, key, value, done);
+                }
             } else {
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
-                auto [left, right, ranchor] = out_of_place_split_node(real, shared_ctx, 8, key, value, done);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                LinkedNode16 *left = nullptr, *right = nullptr;
+                std::string ranchor;
+
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 8, key, value, done);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                } else {
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 8, key, value, done);
+                }
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type12;
 
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
-                auto r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                RemotePointer r;
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                    r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                } else {
+                    r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                }
 
                 if (r.is_nullptr()) {
                     ret = false;
@@ -550,38 +621,68 @@ namespace DiStore::Cluster {
             LinkedNode16 *right, *left;
             RemotePointer r;
             if (pendings <= 2) {
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
-                std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9,
+                                                                             key, value, done);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                } else {
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9,
+                                                                             key, value, done);
+                }
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type10;
 
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
-                r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                    r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                } else {
+                    r = write_back_two<LinkedNode10, LinkedNode10>(data_node, left, right);
+                }
             } else if(pendings <= 4) {
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
-                std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9, key, value, done);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9,
+                                                                             key, value, done);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                } else {
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 9,
+                                                                             key, value, done);
+                }
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type12;
 
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
-                r = write_back_two<LinkedNode10, LinkedNode12>(data_node, left, right);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                    r = write_back_two<LinkedNode10, LinkedNode12>(data_node, left, right);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                } else {
+                    r = write_back_two<LinkedNode10, LinkedNode12>(data_node, left, right);
+                }
             } else {
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
-                std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 10, key, value, done);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 10,
+                                                                             key, value, done);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerSplit);
+                } else {
+                    std::tie(left, right, ranchor) = out_of_place_split_node(real, shared_ctx, 10,
+                                                                             key, value, done);
+                }
 
                 left->type = LinkedNodeType::Type12;
                 right->type = LinkedNodeType::Type12;
 
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
-                r = write_back_two<LinkedNode12, LinkedNode12>(data_node, left, right);
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                    r = write_back_two<LinkedNode12, LinkedNode12>(data_node, left, right);
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
+                } else {
+                    r = write_back_two<LinkedNode12, LinkedNode12>(data_node, left, right);
+                }
             }
 
             if (r.is_nullptr())
@@ -606,7 +707,9 @@ namespace DiStore::Cluster {
     {
         auto depth = cctx->max_depth.fetch_sub(1);
         if (depth > 0) {
-            breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerContention);
+            if (breakdown) {
+                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerContention);
+            }
             auto req = new Concurrency::ConcurrencyRequests;
             req->tag = &key;
             req->content = &value;
@@ -614,7 +717,10 @@ namespace DiStore::Cluster {
 
             while (!req->is_done)
                 ;
-            breakdown->end(Stats::DiStoreBreakdownOps::DataLayerContention);
+
+            if (breakdown) {
+                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerContention);
+            }
             return {req->succeed, false};
         } else {
             // competition failed, should retry

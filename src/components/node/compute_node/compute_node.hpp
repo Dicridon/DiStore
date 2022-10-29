@@ -197,10 +197,16 @@ namespace DiStore::Cluster {
             if (data_node->ctx.compare_exchange_strong(expect, shared_ctx)) {
                 // the only winner should remember to collect pending requests
                 // first process winner's own request
-                breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
-                auto buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
-                                                                           sizeof(NodeType));
-                breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
+                NodeType *buffer;
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
+                    buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
+                                                                          sizeof(NodeType));
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
+                } else {
+                    buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
+                                                                          sizeof(NodeType));
+                }
                 shared_ctx->user_context = buffer;
                 shared_ctx->max_depth = -1;
 
@@ -232,9 +238,14 @@ namespace DiStore::Cluster {
                 }
 
                 if (shared_ctx->requests.unsafe_size() == 0) {
-                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
-                    auto ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
-                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);                    
+                    bool ret = false;
+                    if (breakdown) {
+                        breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+                        ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
+                        breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+                    } else {
+                        ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
+                    }
                     if(ret) {
                         return {true, 0};
                     } else {
