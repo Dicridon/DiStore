@@ -21,12 +21,6 @@ namespace DiStore::Stats {
 
         MemoryAllocation,
         RemoteMemoryAllocation,
-
-        Put,
-        Get,
-        Update,
-        Scan,
-        Delete,
     };
 
     class Breakdown {
@@ -95,12 +89,6 @@ namespace DiStore::Stats {
 
             DiStoreBreakdownOps::MemoryAllocation,
             DiStoreBreakdownOps::RemoteMemoryAllocation,
-
-            DiStoreBreakdownOps::Put,
-            DiStoreBreakdownOps::Get,
-            DiStoreBreakdownOps::Update,
-            DiStoreBreakdownOps::Scan,
-            DiStoreBreakdownOps::Delete,
         };
 
         const size_t batch;
@@ -130,16 +118,6 @@ namespace DiStore::Stats {
                 return "MemoryAllocation";
             case DiStoreBreakdownOps::RemoteMemoryAllocation:
                 return "RemoteMemoryAllocation";
-            case DiStoreBreakdownOps::Put:
-                return "Put";
-            case DiStoreBreakdownOps::Get:
-                return "Get";
-            case DiStoreBreakdownOps::Update:
-                return "Update";
-            case DiStoreBreakdownOps::Scan:
-                return "Scan";
-            case DiStoreBreakdownOps::Delete:
-                return "Delete";
             default:
                 return "Unknwon";
             }

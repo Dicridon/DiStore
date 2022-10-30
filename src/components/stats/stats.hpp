@@ -6,129 +6,98 @@
 #include <chrono>
 #include <algorithm>
 #include <numeric>
+#include <unordered_map>
 namespace DiStore::Stats {
-    class LatencyCatcher {
-    public:
-        LatencyCatcher() = default;
-        ~LatencyCatcher() = default;
-
-        inline auto begin() noexcept {
-            s = std::chrono::steady_clock::now();
-        }
-
-        inline auto end() noexcept {
-            e = std::chrono::steady_clock::now();
-        }
-
-        // report in nanosecond
-        inline auto report() noexcept -> double {
-            return double(std::chrono::duration_cast<std::chrono::nanoseconds>(e - s).count());
-        }
-    private:
-        std::chrono::time_point<std::chrono::steady_clock> s;
-        std::chrono::time_point<std::chrono::steady_clock> e;
+    enum class DiStoreOperationOps {
+        Put,
+        Get,
+        Update,
+        Scan,
+        Delete
     };
 
-    /*
-     * How to use:
-     *     This class collects timespan over a certain number of operations
-     *     and caculate mean latenc and percentiles out of these collected
-     *     timespans
-     * This class is not write thread-safe
-     */
-    class TimedLatency {
+    class Operation {
     public:
-        TimedLatency(size_t batch_size)
-            : batch(batch_size)
-        {
-            data.reserve(batch_size);
+        Operation(size_t batch_size)
+            :batch(batch_size) {}
+        ~Operation() = default;
+
+        inline auto begin(DiStoreOperationOps op) noexcept -> void {
+#ifdef __STATS__
+            spans[op].first = std::chrono::steady_clock::now();
+#endif
         }
 
-        ~TimedLatency() = default;
+        inline auto end(DiStoreOperationOps op) noexcept -> void {
+#ifdef __STATS__
+            auto pair = spans[op];
+            pair.second = std::chrono::steady_clock::now();
 
-        auto reset() -> void {
-            processed = false;
-            data.clear();
-            sorted.clear();
-        }
+            auto diff = pair.second - pair.first;
+            auto span = double(std::chrono::duration_cast<std::chrono::nanoseconds>(diff).count());
+            auto &tmp_arr = tmp[op];
+            tmp_arr.push_back(span);
 
-        inline auto record_time() -> void {
-            data.push_back(std::chrono::steady_clock::now());
-        }
-
-        inline auto avg() -> double {
-            process();
-            return Misc::avg(sorted);
-        }
-
-        inline auto p50() -> double {
-            process();
-            return Misc::p50(sorted);
-        }
-
-        inline auto p90() -> double {
-            process();
-            return Misc::p90(sorted);
-        }
-
-        inline auto p99() -> double {
-            process();
-            return Misc::p99(sorted);
-        }
-
-        inline auto p999() -> double {
-            process();
-            return Misc::p999(sorted);
-        }
-
-        auto process() -> bool {
-            if (processed)
-                return true;
-
-            if (data.size() < batch) {
-                return false;
+            if (tmp_arr.size() == batch) {
+                results[op].push_back(Misc::avg(tmp_arr));
+                tmp_arr.clear();
             }
+#endif
+        }
 
-            auto s = data.cbegin() + 1;
-            while (s != data.cend()) {
-                double span = std::chrono::duration_cast<std::chrono::microseconds>(*s - *(s - 1)).count();
-                sorted.push_back(span);
-                ++s;
+        auto report() noexcept -> void {
+#ifdef __STATS__
+            for (auto &k : ops_table) {
+                std::cout << ">> Operation " << decode_breakdown(k) << ": ";
+                auto &arr = results[k];
+                std::sort(arr.begin(), arr.end(), std::greater<>());
+                std::cout << "avg: " << Misc::avg(arr) << "ns, ";
+                std::cout << "p50: " << Misc::p50(arr) << "ns, ";
+                std::cout << "p90: " << Misc::p90(arr) << "ns, ";
+                std::cout << "p99: " << Misc::p99(arr) << "ns\n";
             }
-            std::sort(sorted.begin(), sorted.end(), std::greater<>());
-            return processed = true;
-        }
-    private:;
-        size_t batch;
-        bool processed = false;
-        std::vector<std::chrono::time_point<std::chrono::steady_clock>> data;
-        std::vector<double> sorted;
-
-    };
-
-    class TimedThroughput {
-    public:
-        TimedThroughput() {
-            current = std::chrono::steady_clock::now();
+#endif
         }
 
-        ~TimedThroughput() = default;
-
-        auto reset() -> void {
-            processed = false;
-            current = std::chrono::steady_clock::now();
+        auto clear() noexcept -> void {
+            for (auto &k : ops_table) {
+                results[k].clear();
+                tmp[k].clear();
+            }
         }
-
-        auto report_throughput(size_t ops) -> double {
-            auto s = std::chrono::steady_clock::now();
-            double span = std::chrono::duration_cast<std::chrono::microseconds>(s - current).count();
-            current = std::chrono::steady_clock::now();
-            return ops / span;
-        }
-
     private:
-        bool processed = false;
-        std::chrono::time_point<std::chrono::steady_clock> current;
+        using SteadyTimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+        using SteadyTimePair = std::pair<SteadyTimePoint, SteadyTimePoint>;
+
+        constexpr static DiStoreOperationOps ops_table[] = {
+            DiStoreOperationOps::Put,
+            DiStoreOperationOps::Get,
+            DiStoreOperationOps::Update,
+            DiStoreOperationOps::Scan,
+            DiStoreOperationOps::Delete,
+        };
+
+        const size_t batch;
+        std::unordered_map<DiStoreOperationOps, std::vector<double>> results;
+        std::unordered_map<DiStoreOperationOps, std::vector<double>> tmp;
+        std::unordered_map<DiStoreOperationOps, SteadyTimePair> spans;
+
+        auto decode_breakdown(DiStoreOperationOps op) -> std::string {
+            switch (op) {
+            case DiStoreOperationOps::Put:
+                return "Put";
+            case DiStoreOperationOps::Get:
+                return "Get";
+            case DiStoreOperationOps::Update:
+                return "Update";
+            case DiStoreOperationOps::Scan:
+                return "Scan";
+            case DiStoreOperationOps::Delete:
+                return "Delete";
+            default:
+                return "Unknwon";
+            }
+        }
     };
 }
 #endif
