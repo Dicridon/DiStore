@@ -61,33 +61,34 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
             auto total_counter = 0;
 
             Stats::Breakdown breakdown(sample_batch);
+            Stats::Operation operation(sample_batch);
 
             for (size_t i = 0; i < total / threads; i++) {
                 auto op = ycsb->next();
                 switch (op.first) {
                 case Workload::YCSBOperation::Insert:
-                    breakdown.begin(Stats::DiStoreBreakdownOps::Put);
+                    operation.begin(Stats::DiStoreOperationOps::Put);
                     if (!node->put(op.second, op.second, &breakdown)) {
                         Debug::error("Putting %s failed\n", op.second.c_str());
                         return;
                     }
-                    breakdown.end(Stats::DiStoreBreakdownOps::Put);
+                    operation.end(Stats::DiStoreOperationOps::Put);
                     break;
                 case Workload::YCSBOperation::Update:
-                    breakdown.begin(Stats::DiStoreBreakdownOps::Update);
+                    operation.begin(Stats::DiStoreOperationOps::Update);
                     if (!node->update(op.second, op.second, &breakdown)) {
                         Debug::error("Updating %s failed\n", op.second.c_str());
                         return;
                     }
-                    breakdown.end(Stats::DiStoreBreakdownOps::Update);
+                    operation.end(Stats::DiStoreOperationOps::Update);
                     break;
                 case Workload::YCSBOperation::Search:
-                    breakdown.begin(Stats::DiStoreBreakdownOps::Get);
+                    operation.begin(Stats::DiStoreOperationOps::Get);
                     if (auto v = node->get(op.second, &breakdown); !v.has_value()) {
                         Debug::error("Searching %s failed\n", op.second.c_str());
                         return;
                     }
-                    breakdown.end(Stats::DiStoreBreakdownOps::Get);
+                    operation.end(Stats::DiStoreOperationOps::Get);
                     break;
                 case Workload::YCSBOperation::Scan:
                     return;
@@ -100,9 +101,11 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                     print_lock.lock();
                     std::cout << "Thread " << tid << " reporting\n";
                     breakdown.report();
+                    operation.report();
                     print_lock.unlock();
                     total_counter = 0;
                     breakdown.clear();
+                    operation.clear();
                 }
             }
 
