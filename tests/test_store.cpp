@@ -49,6 +49,7 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     workers.reserve(threads);
 
     std::mutex print_lock;
+    std::atomic_int ready(0);
 
     auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < threads; i++) {
@@ -57,6 +58,10 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                 Debug::error("Failed to register a thread\n");
                 return;
             }
+
+            ++ready;
+            while(ready != threads)
+                ;
 
             auto total_counter = 0;
 

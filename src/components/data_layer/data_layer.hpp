@@ -141,6 +141,12 @@ namespace DiStore::DataLayer {
             std::cout << "\n";
         }
 
+        auto check() const noexcept -> void {
+            std::cout << ">> Type: " << type << "\n";
+            std::cout << ">> Next: " << next << "\n";
+            assert(next <= 16);
+        }
+
         auto usage() const noexcept -> double {
             switch (type) {
             case LinkedNodeType::Type10:

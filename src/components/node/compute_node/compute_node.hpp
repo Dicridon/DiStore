@@ -70,6 +70,7 @@ namespace DiStore::Cluster {
         // for debug
         auto report_cluster_info() const noexcept -> void;
         auto dump_list() noexcept -> void;
+        auto check_list() noexcept -> void;
         auto report_search_layer_stats() const -> void;
 
         // this method takes RDMA buffer's ownership, thus is not const

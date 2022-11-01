@@ -930,6 +930,21 @@ namespace DiStore::Cluster {
         }
      }
 
+    auto ComputeNode::check_list() noexcept -> void {
+        slist.dump();
+
+        auto walker = slist.iter();
+
+        while (walker->forwards[0]) {
+            walker = walker->forwards[0];
+            auto buffer = remote_memory_allocator.fetch_as<LinkedNode16 *>(walker->data_node,
+                                                                           sizeof(LinkedNode16));
+
+            std::cout << ">> Anchor: " << walker->anchor << "\n";
+            buffer->check();
+        }
+    }
+
     auto ComputeNode::report_search_layer_stats() const -> void {
         Debug::info("Reporting search layer stats\n");
         slist.show_levels();
@@ -948,7 +963,7 @@ namespace DiStore::Cluster {
         }
 
         for (auto &[k, v] : data_layer_stats) {
-            std::sort(v.begin(), v.end(), std::greater<>());
+            std::sort(v.begin(), v.end());
         }
 
         for (auto &[k, v] : data_layer_stats) {
