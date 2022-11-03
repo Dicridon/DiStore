@@ -1,6 +1,7 @@
 #ifndef __DISTORE__STATS__STATS__
 #define __DISTORE__STATS__STATS__
 #include "misc/misc.hpp"
+#include "debug/debug.hpp"
 
 #include <queue>
 #include <chrono>
@@ -8,96 +9,74 @@
 #include <numeric>
 #include <unordered_map>
 namespace DiStore::Stats {
-    enum class DiStoreOperationOps {
-        Put,
-        Get,
-        Update,
-        Scan,
-        Delete
+    struct LatStats {
+        double avg;
+        double p50;
+        double p90;
+        double p99;
+
+        LatStats() = default;
+        LatStats(double avg_, double p50_, double p90_, double p99_)
+            : avg(avg_),
+              p50(p50_),
+              p90(p90_),
+              p99(p99_) {}
+        ~LatStats() = default;
     };
 
-    class Operation {
+    class StatsCollector {
     public:
-        Operation(size_t batch_size)
-            :batch(batch_size) {}
-        ~Operation() = default;
+        StatsCollector() = default;
+        ~StatsCollector() = default;
 
-        inline auto begin(DiStoreOperationOps op) noexcept -> void {
-#ifdef __STATS__
-            spans[op].first = std::chrono::steady_clock::now();
-#endif
+        inline auto submit(const std::string &op, LatStats &&stats) -> void {
+            lats[op].push_back(std::move(stats));
         }
 
-        inline auto end(DiStoreOperationOps op) noexcept -> void {
-#ifdef __STATS__
-            auto pair = spans[op];
-            pair.second = std::chrono::steady_clock::now();
+        auto get_summarized() const noexcept -> std::vector<std::pair<std::string, LatStats>> {
+            std::vector<std::pair<std::string, LatStats>> ret;
+            for (const auto &[k, v] : lats) {
+                std::vector<double> avg_tmp;
+                std::vector<double> p50_tmp;
+                std::vector<double> p90_tmp;
+                std::vector<double> p99_tmp;
+                LatStats stats;
+                avg_tmp.reserve(v.size());
+                p50_tmp.reserve(v.size());
+                p90_tmp.reserve(v.size());
+                p99_tmp.reserve(v.size());
 
-            auto diff = pair.second - pair.first;
-            auto span = double(std::chrono::duration_cast<std::chrono::nanoseconds>(diff).count());
-            auto &tmp_arr = tmp[op];
-            tmp_arr.push_back(span);
+                for (const auto &n : v) {
+                    avg_tmp.push_back(n.avg);
+                    p50_tmp.push_back(n.p50);
+                    p90_tmp.push_back(n.p90);
+                    p99_tmp.push_back(n.p99);                    
+                }
 
-            if (tmp_arr.size() == batch) {
-                results[op].push_back(Misc::avg(tmp_arr));
-                tmp_arr.clear();
+                stats.avg = Misc::avg(avg_tmp);
+                stats.p50 = Misc::avg(p50_tmp);
+                stats.p90 = Misc::avg(p90_tmp);
+                stats.p99 = Misc::avg(p99_tmp);
+
+                ret.push_back({k, stats});
             }
-#endif
+
+            return ret;
         }
 
-        auto report() noexcept -> void {
-#ifdef __STATS__
-            for (auto &k : ops_table) {
-                std::cout << ">> Operation " << decode_breakdown(k) << ": ";
-                auto &arr = results[k];
-                std::sort(arr.begin(), arr.end(), std::greater<>());
-                std::cout << "avg: " << Misc::avg(arr) << "ns, ";
-                std::cout << "p50: " << Misc::p50(arr) << "ns, ";
-                std::cout << "p90: " << Misc::p90(arr) << "ns, ";
-                std::cout << "p99: " << Misc::p99(arr) << "ns\n";
-            }
-#endif
-        }
+        auto summarize() const noexcept -> void {
+            auto ret = get_summarized();
 
-        auto clear() noexcept -> void {
-            for (auto &k : ops_table) {
-                results[k].clear();
-                tmp[k].clear();
+            for (const auto &v : ret) {
+                std::cout << v.first << ": ";
+                std::cout << "avg: " << v.second.avg << ", ";
+                std::cout << "p50: " << v.second.p50 << ", ";
+                std::cout << "p90: " << v.second.p90 << ", ";
+                std::cout << "p99: " << v.second.p99 << "\n";
             }
         }
     private:
-        using SteadyTimePoint = std::chrono::time_point<std::chrono::steady_clock>;
-        using SteadyTimePair = std::pair<SteadyTimePoint, SteadyTimePoint>;
-
-        constexpr static DiStoreOperationOps ops_table[] = {
-            DiStoreOperationOps::Put,
-            DiStoreOperationOps::Get,
-            DiStoreOperationOps::Update,
-            DiStoreOperationOps::Scan,
-            DiStoreOperationOps::Delete,
-        };
-
-        const size_t batch;
-        std::unordered_map<DiStoreOperationOps, std::vector<double>> results;
-        std::unordered_map<DiStoreOperationOps, std::vector<double>> tmp;
-        std::unordered_map<DiStoreOperationOps, SteadyTimePair> spans;
-
-        auto decode_breakdown(DiStoreOperationOps op) -> std::string {
-            switch (op) {
-            case DiStoreOperationOps::Put:
-                return "Put";
-            case DiStoreOperationOps::Get:
-                return "Get";
-            case DiStoreOperationOps::Update:
-                return "Update";
-            case DiStoreOperationOps::Scan:
-                return "Scan";
-            case DiStoreOperationOps::Delete:
-                return "Delete";
-            default:
-                return "Unknwon";
-            }
-        }
+        std::unordered_map<std::string, std::vector<LatStats>> lats;
     };
 }
 #endif

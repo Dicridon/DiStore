@@ -1,5 +1,5 @@
-#ifndef __DISTORE__BREAKDOWN__BREAKDOWN__
-#define __DISTORE__BREAKDOWN__BREAKDOWN__
+#ifndef __DISTORE__STATS__BREAKDOWN__BREAKDOWN__
+#define __DISTORE__STATS__BREAKDOWN__BREAKDOWN__
 #include "config/config.hpp"
 #include "stats/stats.hpp"
 #include "misc/misc.hpp"
@@ -25,6 +25,7 @@ namespace DiStore::Stats {
 
     class Breakdown {
     public:
+        friend StatsCollector;
         Breakdown(size_t batch_size)
             :batch(batch_size) {}
         ~Breakdown() = default;
@@ -64,6 +65,16 @@ namespace DiStore::Stats {
                 std::cout << "p99: " << Misc::p99(arr) << "ns\n";
             }
 #endif
+        }
+
+        auto submit(StatsCollector &collector) noexcept -> void {
+            for (auto &k : ops_table) {
+                auto &arr = results[k];
+                std::sort(arr.begin(), arr.end(), std::greater<>());
+                collector.submit(decode_breakdown(k),
+                                 {Misc::avg(arr), Misc::p50(arr),
+                                  Misc::p90(arr), Misc::p99(arr)});
+            }            
         }
 
         auto clear() noexcept -> void {

@@ -12,13 +12,17 @@
 ./src/components/node/node.cpp: ./src/components/node/node.hpp
 ./src/components/node/node.hpp: ./src/components/memory/memory.hpp ./src/components/memory/remote_memory/remote_memory.hpp
 ./src/components/node/compute_node/compute_node.cpp: ./src/components/node/compute_node/compute_node.hpp
-./src/components/node/compute_node/compute_node.hpp: ./src/components/node/node.hpp ./src/components/memory/memory.hpp ./src/components/memory/compute_node/compute_node.hpp ./src/components/kv/kv.hpp ./src/components/erpc_wrapper/erpc_wrapper.hpp ./src/components/debug/debug.hpp ./src/components/search_layer/search_layer.hpp ./src/components/data_layer/data_layer.hpp ./src/components/handover_locktable/handover_locktable.hpp ./src/components/breakdown/breakdown.hpp
+./src/components/node/compute_node/compute_node.hpp: ./src/components/node/node.hpp ./src/components/memory/memory.hpp ./src/components/memory/compute_node/compute_node.hpp ./src/components/kv/kv.hpp ./src/components/erpc_wrapper/erpc_wrapper.hpp ./src/components/debug/debug.hpp ./src/components/search_layer/search_layer.hpp ./src/components/data_layer/data_layer.hpp ./src/components/handover_locktable/handover_locktable.hpp ./src/components/stats/stats.hpp ./src/components/stats/breakdown/breakdown.hpp ./src/components/stats/operation/operation.hpp
 ./src/components/node/memory_node/memory_node.hpp: ./src/components/node/node.hpp ./src/components/memory/memory_node/memory_node.hpp ./src/components/erpc_wrapper/erpc_wrapper.hpp ./src/components/rdma_util/rdma_util.hpp ./src/components/misc/misc.hpp ./src/components/debug/debug.hpp
 ./src/components/node/memory_node/memory_node.cpp: ./src/components/node/memory_node/memory_node.hpp
 ./src/components/tests/tests.cpp: ./src/components/tests/tests.hpp
 ./src/components/tests/tests.hpp: 
 ./src/components/stats/stats.hpp: ./src/components/misc/misc.hpp
+./src/components/stats/operation/operation.cpp: ./src/components/stats/operation/operation.hpp
+./src/components/stats/operation/operation.hpp: ./src/components/stats/stats.hpp ./src/components/config/config.hpp ./src/components/misc/misc.hpp
 ./src/components/stats/stats.cpp: ./src/components/stats/stats.hpp
+./src/components/stats/breakdown/breakdown.hpp: ./src/components/config/config.hpp ./src/components/stats/stats.hpp ./src/components/misc/misc.hpp
+./src/components/stats/breakdown/breakdown.cpp: ./src/components/stats/breakdown/breakdown.hpp
 ./src/components/city/city.cpp: ./src/components/city/city.hpp
 ./src/components/city/city.hpp: 
 ./src/components/handover_locktable/handover_locktable.cpp: ./src/components/handover_locktable/handover_locktable.hpp
@@ -43,5 +47,3 @@
 ./src/components/search_layer/search_layer.cpp: ./src/components/search_layer/search_layer.hpp
 ./src/components/misc/misc.cpp: ./src/components/misc/misc.hpp
 ./src/components/misc/misc.hpp: 
-./src/components/breakdown/breakdown.hpp: ./src/components/config/config.hpp ./src/components/stats/stats.hpp ./src/components/misc/misc.hpp
-./src/components/breakdown/breakdown.cpp: ./src/components/breakdown/breakdown.hpp

@@ -51,6 +51,9 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     std::mutex print_lock;
     std::atomic_int ready(0);
 
+    Stats::StatsCollector breakdown_collectors[threads];
+    Stats::StatsCollector operation_collectors[threads];    
+
     auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < threads; i++) {
         workers.emplace_back([&](int tid) {
@@ -109,7 +112,9 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                     operation.report();
                     print_lock.unlock();
                     total_counter = 0;
+                    breakdown.submit(breakdown_collectors[tid]);
                     breakdown.clear();
+                    operation.submit(operation_collectors[tid]);
                     operation.clear();
                 }
             }
@@ -123,7 +128,21 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     auto end = std::chrono::steady_clock::now();
 
     double time = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
-    Debug::info("Throughput: %fKOPS\n", total / time / 1000);
+    Debug::info("Throughput: %fKOPS. This value can be lower than expected values "
+                "if breakdown are enabled\n", total / time / 1000);
+    Debug::info("Breakdown of each thread\n");
+    for (int i = 0; i < threads; i++) {
+        std::cout << "Thread " << i << " reporting\n";
+        breakdown_collectors[i].summarize();
+    }
+
+    Debug::info("Performance of each thread. These reported values can be lower than expected "
+                "due to collecting stats for breakdown\n");
+    for (int i = 0; i < threads; i++) {
+        std::cout << "Thread " << i << " reporting\n";
+        breakdown_collectors[i].summarize();
+    }
+    
     node->report_search_layer_stats();
     node->report_data_layer_stats();
     Debug::info("You may see segfault due to the destruction of RDMAContext,"
