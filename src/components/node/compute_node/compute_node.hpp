@@ -352,8 +352,8 @@ namespace DiStore::Cluster {
 
             // for implementation simplicity, we assume only one MN``
             auto rdma = remote_memory_allocator.get_rdma(l);
-            auto l_sge = rdma->generate_sge(nullptr, sizeof(LinkedNode16), 0);
-            auto r_sge = rdma->generate_sge(nullptr, sizeof(LinkedNode16), sizeof(LinkedNode16));
+            auto l_sge = rdma->generate_sge(nullptr, sizeof(LNodeType), 0);
+            auto r_sge = rdma->generate_sge(nullptr, sizeof(RNodeType), sizeof(LinkedNode16));
 
             auto wr_l = rdma->generate_send_wr(0, l_sge.get(), 1, l.get_as<byte_ptr_t>(), nullptr);
             auto wr_r = rdma->generate_send_wr(1, r_sge.get(), 1, r.get_as<byte_ptr_t>(), nullptr);
