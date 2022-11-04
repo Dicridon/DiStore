@@ -227,6 +227,13 @@ namespace DiStore::Cluster {
         return remote;
     }
 
+    auto ComputeNode::preallocate() -> bool {
+        auto new_seg = remote_memory_allocator.offer_remote_segment();
+        auto base = remote_memory_allocator.get_base_addr(new_seg.get_node());
+        allocator.apply_for_memory(new_seg, base);
+        return true;
+    }
+
     auto ComputeNode::free(RemotePointer p)  -> void {
         allocator.free(p);
     }
@@ -962,11 +969,10 @@ namespace DiStore::Cluster {
             iter = iter->forwards[0];
         }
 
+        auto total = 0.0;
         for (auto &[k, v] : data_layer_stats) {
             std::sort(v.begin(), v.end());
-        }
-
-        for (auto &[k, v] : data_layer_stats) {
+            total += v.size();
             std::cout << ">> Type " << k << " usage: "
                       << "avg: " << Misc::avg(v) << ", "
                       << "p50: " << Misc::p50(v) << ", "
@@ -974,6 +980,9 @@ namespace DiStore::Cluster {
                       << "p99: " << Misc::p99(v) << "\n";
         }
 
-        iter = iter->forwards[0];
+        Debug::info("Node type distribution\n");
+        for (auto &[k, v] : data_layer_stats) {
+            std::cout << ">> Type " << k << ": " << v.size() / total << "\n";
+        }
     }
 }

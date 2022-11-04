@@ -36,7 +36,8 @@ namespace DiStore {
             static auto make_bitmap(byte_ptr_t region, size_t count) -> Bitmap * {
                 auto bitmap = reinterpret_cast<Bitmap *>(region);
 
-                size_t num_bytes = count / 8;
+                // always keep one byte
+                size_t num_bytes = count / 8 + 1;
                 bitmap->bytes = num_bytes;
                 for (size_t i = 0; i < num_bytes; i++) {
                     bitmap->map[i] = 0;

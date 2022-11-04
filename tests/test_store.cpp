@@ -28,21 +28,8 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     // guard.append(DataLayer::Constants::KEYLEN - guard.size(), 'x');
 
     auto ycsb = Workload::YCSBWorkload::make_ycsb_workload(total,
-                                                           total / 10, /* ensure skewness*/
+                                                           total / 2, /* ensure skewness*/
                                                            workload_type);
-    Stats::Breakdown b(1000000);
-    Debug::info("Populating\n");
-    for (size_t i = 0; i < total / 10; i++) {
-        auto k = std::to_string(i);
-        k.insert(0, Workload::Constants::KEY_SIZE - k.size(), '0');
-
-        if (!node->put(k, k, &b)) {
-            Debug::error("Putting key %s failed\n", k.c_str());
-            return;
-        }
-    }
-    b.clear();
-
     // start benching
     const size_t sample_batch = 1000;
     std::vector<std::thread> workers;
@@ -52,8 +39,9 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
     std::atomic_int ready(0);
 
     Stats::StatsCollector breakdown_collectors[threads];
-    Stats::StatsCollector operation_collectors[threads];    
+    Stats::StatsCollector operation_collectors[threads];
 
+    node->preallocate();
     auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < threads; i++) {
         workers.emplace_back([&](int tid) {
@@ -65,6 +53,30 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
             ++ready;
             while(ready != threads)
                 ;
+
+            if (tid == 0) {
+                Stats::Breakdown b(1000000);
+                auto warm = total;
+                if (workload_type == Workload::YCSBWorkloadType::YCSB_L) {
+                    warm /= 10;
+                }
+
+                Debug::info("Populating %lu items\n", warm);
+                for (size_t i = 0; i < warm; i++) {
+                    auto k = std::to_string(i);
+                    k.insert(0, Workload::Constants::KEY_SIZE - k.size(), '0');
+
+                    if (!node->put(k, k, &b)) {
+                        Debug::error("Putting key %s failed\n", k.c_str());
+                        return;
+                    }
+
+                    if ((i % 500000) == 0) {
+                        std::cout << i << " items populated\n";
+                    }
+                }
+                b.clear();
+            }
 
             auto total_counter = 0;
 
@@ -140,9 +152,9 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                 "due to collecting stats for breakdown\n");
     for (int i = 0; i < threads; i++) {
         std::cout << "Thread " << i << " reporting\n";
-        breakdown_collectors[i].summarize();
+        operation_collectors[i].summarize();
     }
-    
+
     node->report_search_layer_stats();
     node->report_data_layer_stats();
     Debug::info("You may see segfault due to the destruction of RDMAContext,"

@@ -53,7 +53,7 @@ namespace DiStore::Misc {
         if (sorted.size() == 0)
             return 0;
         auto partition = ceil(sorted.size() * (1 - percent / 100));
-        return std::accumulate(sorted.begin(), sorted.begin() + partition, 0) / partition;
+        return std::accumulate(sorted.begin(), sorted.begin() + partition, 0.0) / partition;
     }
 
     // input vector is not required to be sorted
