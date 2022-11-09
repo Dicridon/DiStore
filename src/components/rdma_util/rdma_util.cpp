@@ -254,6 +254,18 @@ namespace DiStore::RDMAUtil {
         return std::make_pair(Enums::Status::Ok, 0);
     }
 
+    auto RDMAContext::post_batch_read(struct ibv_send_wr *wrs) -> StatusPair {
+        struct ibv_send_wr *bad_wr;
+
+        if (auto ret = ibv_post_send(qp, wrs, &bad_wr); ret != 0) {
+            Debug::error("posting wr %d failed, error code: %d\n", bad_wr->wr_id, ret);
+            return std::make_pair(Enums::Status::ReadError, ret);
+        }
+
+        return std::make_pair(Enums::Status::Ok, 0);
+    }
+
+
     auto RDMAContext::post_batch_write_test() -> void {
         auto ptr = (uint64_t *)buf;
         ptr[0] = 0x12344321UL;

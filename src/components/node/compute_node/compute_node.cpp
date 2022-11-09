@@ -214,6 +214,57 @@ namespace DiStore::Cluster {
         return ret;
     }
 
+    auto ComputeNode::scan(const std::string &key, size_t count, Stats::Breakdown *breakdown)
+        -> uint64_t
+    {
+        auto total = 0UL;
+        auto first = slist.fuzzy_search(key);
+        std::vector<std::string> ret;
+
+        if (first == nullptr) {
+            return {};
+        }
+
+        auto second = first->forwards[0];
+        LinkedNode16 l[2], r[2];
+        RDMAContext *rdma = nullptr;
+        uint8_t flip = 0;
+        if (second && key >= second->anchor) {
+            fetch_two(first, second, l[flip], r[flip]);
+        } else {
+            auto n = remote_memory_allocator.fetch_as<LinkedNode16 *>(first->data_node, sizeof(LinkedNode16));
+            total = n->scan(key, count, ret);
+            return total;
+        }
+
+        do {
+            first = second->forwards[0];
+            if (first == nullptr) {
+                poll_fetch_two_async(rdma, r[flip], l[flip]);
+                total += r[flip].scan(key, count - total, ret);
+                total += l[flip].scan(key, count - total, ret);
+                return total;
+            }
+
+            second = first->forwards[0];
+            if (second == nullptr) {
+                total += r[flip].scan(key, count - total, ret);
+                total += l[flip].scan(key, count - total, ret);
+                auto n = remote_memory_allocator.fetch_as<LinkedNode16 *>(first->data_node, sizeof(LinkedNode16));
+                n->scan(key, count, ret);
+                return total;
+            }
+
+            rdma = fetch_two_async(first, second);
+            total += r[flip].scan(key, count - total, ret);
+            total += l[flip].scan(key, count - total, ret);
+            flip = (flip + 1) & 0x1;
+            poll_fetch_two_async(rdma, r[flip], l[flip]);
+        } while (ret.size() < count);
+
+        return total;
+    }
+
     auto ComputeNode::allocate(size_t size) -> RemotePointer {
         auto remote = allocator.allocate(size);
         if (remote.is_nullptr()) {

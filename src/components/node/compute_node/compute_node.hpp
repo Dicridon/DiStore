@@ -62,8 +62,7 @@ namespace DiStore::Cluster {
         auto update(const std::string &key, const std::string &value, Stats::Breakdown *breakdown)
             -> bool;
         auto remove(const std::string &key, Stats::Breakdown *breakdown) -> bool;
-        auto scan(const std::string &key, size_t count, Stats::Breakdown *breakdown)
-            -> std::vector<std::string>;
+        auto scan(const std::string &key, size_t count, Stats::Breakdown *breakdown) -> uint64_t;
 
         // always return non-null pointer as long as remote memory is not depleted
         auto allocate(size_t size) -> RemotePointer;
@@ -345,7 +344,9 @@ namespace DiStore::Cluster {
 
         // return the address of newly allocated right
         template<typename LNodeType, typename RNodeType>
-        auto write_back_two(SkipListNode *data_node, LinkedNode16 *left, LinkedNode16 *right) -> RemotePointer {
+        auto write_back_two(SkipListNode *data_node, LinkedNode16 *left, LinkedNode16 *right)
+            -> RemotePointer
+        {
             auto l = allocate(sizeof(LNodeType));
             auto r = allocate(sizeof(RNodeType));
 
@@ -376,6 +377,81 @@ namespace DiStore::Cluster {
 
             return r;
         }
+
+        auto fetch_two(SkipListNode *left, SkipListNode *right, LinkedNode16 &l, LinkedNode16 &r)
+            -> bool
+        {
+            auto rdma = remote_memory_allocator.get_rdma(left->data_node);
+
+            auto l_sge = rdma->generate_sge(nullptr, sizeof_node(left->type), 0);
+            auto r_sge = rdma->generate_sge(nullptr, sizeof_node(right->type), sizeof(LinkedNode16));
+
+            auto wr_l = rdma->generate_send_wr(0, l_sge.get(), 1, left->data_node.get_as<byte_ptr_t>(),
+                                               nullptr, IBV_WR_RDMA_READ);
+            auto wr_r = rdma->generate_send_wr(0, l_sge.get(), 1, right->data_node.get_as<byte_ptr_t>(),
+                                               nullptr, IBV_WR_RDMA_READ);
+
+            wr_l->send_flags = 0;
+            wr_l->next = wr_r.get();
+
+            rdma->post_batch_read(wr_l.get());
+            if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
+                return false;
+            }
+
+            auto buf = reinterpret_cast<const LinkedNode16 *>(rdma->get_buf());
+            memcpy(&l, buf, sizeof(LinkedNode16));
+            memcpy(&r, buf + 1, sizeof(LinkedNode16));
+
+            return true;
+        }
+
+        /*
+         * This method tries to fetch two data node from remote memory with batched requests
+         * without waiting the completion
+         *
+         * The caller obtained the return value from this method own the RDMAContext and this
+         * context is reserved for the batched requests posted from this method. No more
+         * requests should be posted via this context before the polling, otherwise the RDMA
+         * buffer would corrupt
+         */
+        auto fetch_two_async(SkipListNode *left, SkipListNode *right) -> RDMAContext * {
+            auto rdma = remote_memory_allocator.get_rdma(left->data_node);
+
+            auto l_sge = rdma->generate_sge(nullptr, sizeof_node(left->type), 0);
+            auto r_sge = rdma->generate_sge(nullptr, sizeof_node(right->type), sizeof(LinkedNode16));
+
+            auto wr_l = rdma->generate_send_wr(0, l_sge.get(), 1, left->data_node.get_as<byte_ptr_t>(),
+                                               nullptr, IBV_WR_RDMA_READ);
+            auto wr_r = rdma->generate_send_wr(0, l_sge.get(), 1, right->data_node.get_as<byte_ptr_t>(),
+                                               nullptr, IBV_WR_RDMA_READ);
+
+            wr_l->send_flags = 0;
+            wr_l->next = wr_r.get();
+
+            rdma->post_batch_read(wr_l.get());
+
+            return rdma;
+        }
+
+        /*
+         * This method polls the RDMAContext obtained from fet_two_async. The return values are
+         * two pointers pointing the the underlying RDMA buffer of the RDMAContext. To reuse the
+         * RDMA buffer while reserving the content in the buffer, please copy the content to other
+         * places
+         */
+        auto poll_fetch_two_async(RDMAContext *rdma, LinkedNode16 &l, LinkedNode16 &r) -> bool {
+            if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
+                return false;
+            }
+
+            auto buf = reinterpret_cast<const LinkedNode16 *>(rdma->get_buf());
+            memcpy(&l, buf, sizeof(LinkedNode16));
+            memcpy(&r, buf + 1, sizeof(LinkedNode16));
+
+            return true;
+        }
+
 
         auto async_update(SkipListNode *data_node, const std::string &anchor,
                           LinkedNodeType t, RemotePointer r) -> void;

@@ -13,4 +13,5 @@
 ./tests/test_inplace_split.cpp: ./src/components/node/compute_node/compute_node.hpp
 ./tests/test_tbb.cpp: ./src/components/handover_locktable/handover_locktable.hpp
 ./tests/test_mnode_allocator.cpp: ./src/components/memory/memory_node/memory_node.hpp
+./tests/test_misc.cpp: ./src/components/misc/misc.hpp
 ./tests/test_erpc_wrapper.cpp: ./src/components/erpc_wrapper/erpc_wrapper.hpp ./src/components/cmd_parser/cmd_parser.hpp ./src/components/misc/misc.hpp

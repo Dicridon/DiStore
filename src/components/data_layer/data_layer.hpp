@@ -127,6 +127,20 @@ namespace DiStore::DataLayer {
             return true;
         }
 
+        auto scan(const std::string &key, size_t ct, std::vector<std::string> &ret) -> uint64_t {
+            auto total = 0UL;
+            for (int i = 0; i < next; i++) {
+                if (ct - total > 0 &&
+                    key.compare(0, key.size(), (char *)&pairs[i].key[0], key.size()) >= 0) {
+                    ret.emplace_back((char *)&pairs[i].value[0], Constants::VALLEN);
+                    ++total;
+                }
+            }
+
+            return total;
+        }
+
+
         auto dump() const noexcept -> void {
             std::cout << ">> Type: " << type << "\n";
             std::cout << ">> Next: " << next << "\n";

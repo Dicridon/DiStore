@@ -86,19 +86,19 @@ namespace DiStore::RDMAUtil {
         struct ibv_context *ctx;
         struct ibv_pd *pd;
         struct ibv_cq *out_cq;
-        struct ibv_cq *in_cq;            
+        struct ibv_cq *in_cq;
         struct ibv_mr *mr;
         struct ibv_qp *qp;
         connection_certificate local, remote;
         void *buf;
         RDMADevice *device;
-            
+
         auto post_send_helper(const uint8_t *msg, size_t msg_len, enum ibv_wr_opcode opcode, size_t local_offset,
                               size_t remote_offset) -> StatusPair;
         auto post_send_helper(const byte_ptr_t &ptr, const uint8_t *msg, size_t msg_len, enum ibv_wr_opcode opcode,
                               size_t local_offset) -> StatusPair;
 
-        
+
         RDMAContext() = default;
         RDMAContext(const RDMAContext &) = delete;
         RDMAContext(RDMAContext &&) = delete;
@@ -110,12 +110,12 @@ namespace DiStore::RDMAUtil {
             memset(ret.get(), 0, sizeof(RDMAContext));
             return ret;
         }
-            
+
         ~RDMAContext() {
             if (qp) ibv_destroy_qp(qp);
             if (mr) ibv_dereg_mr(mr);
             if (out_cq) ibv_destroy_cq(out_cq);
-            if (in_cq) ibv_destroy_cq(in_cq);                
+            if (in_cq) ibv_destroy_cq(in_cq);
             if (pd) ibv_dealloc_pd(pd);
             // do not release the ctx because it's shared by multiple RDMAContext instances
         }
@@ -149,17 +149,18 @@ namespace DiStore::RDMAUtil {
 
         /*
          * Generate a send wr, with send_flag being IBV_SEND_SIGNALED and next being nullptr
-         */ 
+         */
         auto generate_send_wr(int wr_id, struct ibv_sge *sge, int num_sge, const byte_ptr_t remote,
                               struct ibv_send_wr *next = nullptr,
                               enum ibv_wr_opcode opcode = IBV_WR_RDMA_WRITE)
             -> std::unique_ptr<struct ibv_send_wr>;
 
         auto post_batch_write(struct ibv_send_wr *wrs) -> StatusPair;
+        auto post_batch_read(struct ibv_send_wr *wrs) -> StatusPair;
         auto post_batch_write_test() -> void;
 
         /*
-         * A set of poll_completion functions. 
+         * A set of poll_completion functions.
          * poll_completion_once(): just to check if a completion is generated
          * poll_one_completion(): poll if one completion is generated and return a ibv_wc struct or an error
          */
@@ -182,7 +183,7 @@ namespace DiStore::RDMAUtil {
     };
 
     /*
-     * A wrapping class presenting a single RDMA device, all qps are created from a device should be 
+     * A wrapping class presenting a single RDMA device, all qps are created from a device should be
      * created by invoking RDMADevice::open()
      */
     class RDMADevice {
@@ -203,7 +204,7 @@ namespace DiStore::RDMAUtil {
             ret->dev_name = dev_name;
             ret->ib_port = ib_port;
             ret->gid_idx = gid_idx;
-                
+
             ret->devices = ibv_get_device_list(&dev_num);
             if (!ret->devices) {
                 return std::make_pair(nullptr, Status::NoRDMADeviceList);
@@ -218,7 +219,7 @@ namespace DiStore::RDMAUtil {
                     }
                 }
             }
-                
+
             return std::make_pair(nullptr, Status::DeviceNotFound);
         }
 
@@ -293,4 +294,3 @@ namespace DiStore::RDMAUtil {
     };
 }
 #endif
- 

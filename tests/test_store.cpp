@@ -37,6 +37,7 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
 
     std::mutex print_lock;
     std::atomic_int ready(0);
+    std::atomic_bool go(false);
 
     Stats::StatsCollector breakdown_collectors[threads];
     Stats::StatsCollector operation_collectors[threads];
@@ -76,6 +77,10 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                     }
                 }
                 b.clear();
+                go = true;
+            } else {
+                while(!go)
+                    ;
             }
 
             auto total_counter = 0;
