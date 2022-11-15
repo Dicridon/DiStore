@@ -46,7 +46,6 @@ namespace DiStore {
                 return bitmap;
             }
 
-
             // find an empty slot and return its numbering
             auto find_empty() -> std::optional<size_t> {
                 for (size_t i = 0; i < bytes; i++) {

@@ -183,6 +183,8 @@ namespace DiStore::Cluster {
                 req->is_done = true;
             }
 
+            buffer->crc = crc_validate(buffer, buffer->type);
+            
             if (breakdown) {
                 breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
                 remote_memory_allocator.write_to(node->data_node, DataLayer::sizeof_node(buffer->type));
