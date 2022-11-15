@@ -6,6 +6,8 @@
 #include "misc/misc.hpp"
 #include "workload/workload.hpp"
 
+#include <boost/crc.hpp>
+
 namespace DiStore::DataLayer {
     using namespace Memory;
     namespace Constants {
@@ -39,6 +41,7 @@ namespace DiStore::DataLayer {
     struct LinkedNode {
         RemotePointer llink;
         RemotePointer rlink;
+        uint16_t crc;
         LinkedNodeType type;
 
         // next writtable slot
@@ -198,6 +201,33 @@ namespace DiStore::DataLayer {
             return 0;
         }
     }
+
+    inline auto crc_validate(const LinkedNode16 *buffer, LinkedNodeType type) -> uint16_t {
+        boost::crc_optimal<16, 0x1021, 0xFFFF, 0, false, false>  crcer;
+
+        switch (type) {
+        case Enums::LinkedNodeType::Type10: {
+            crcer.process_bytes(reinterpret_cast<const void *>(buffer->pairs), 10 * sizeof(KV));
+            return crcer.checksum();            
+        }
+        case Enums::LinkedNodeType::Type12: {
+            crcer.process_bytes(reinterpret_cast<const void *>(buffer->pairs), 12 * sizeof(KV));
+            return crcer.checksum();            
+        }
+        case Enums::LinkedNodeType::Type14: {
+            crcer.process_bytes(reinterpret_cast<const void *>(buffer->pairs), 14 * sizeof(KV));
+            return crcer.checksum();            
+        }
+        case Enums::LinkedNodeType::Type16: {
+            crcer.process_bytes(reinterpret_cast<const void *>(buffer->pairs), 16 * sizeof(KV));
+            return crcer.checksum();
+        }
+        default:
+            return 0;
+        }
+    }
+
+
 
 
     // not used

@@ -117,11 +117,6 @@ namespace DiStore::Cluster {
             node = slist.fuzzy_search(key);
         }
 
-        while(node->ctx)
-            ;
-
-        auto ver = node->version;
-
         // we don't have to find the corrent fetch_as type since remote memory is completely
         // exposed to us
         LinkedNode16 *buffer = nullptr;
@@ -135,11 +130,11 @@ namespace DiStore::Cluster {
                                                                       sizeof(LinkedNode16));
         }
 
-        auto v = buffer->find(key);
-        if (ver != node->version)
+        auto crc = crc_validate(buffer, node->type);
+        if (crc != buffer->crc)
             goto retry;
 
-        return v;
+        return buffer->find(key);
     }
 
     auto ComputeNode::update(const std::string &key, const std::string &value,
@@ -210,7 +205,6 @@ namespace DiStore::Cluster {
             }
         }
 
-        ++node->version;
         return ret;
     }
 
@@ -487,6 +481,8 @@ namespace DiStore::Cluster {
             auto real_size = DataLayer::sizeof_node(real->type);
             auto remote = allocate(real_size);
 
+            real->crc = crc_validate(real, real->type);
+
             bool sta = false;
             if (breakdown) {
                 breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
@@ -510,7 +506,6 @@ namespace DiStore::Cluster {
         // e.g., winner resets shared_ctx and a peer thread notice this,
         // then a requests is enqueued, but this winner will not process
         // it.
-        ++data_node->version;
         data_node->ctx.store(nullptr);
         shared_ctx->max_depth = 4;
         return {ret, false};
@@ -565,6 +560,8 @@ namespace DiStore::Cluster {
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type10;
+                left->crc = crc_validate(left, left->type);
+                right->crc = crc_validate(right, right->type);
 
                 RemotePointer r;
                 if (breakdown) {
@@ -587,7 +584,6 @@ namespace DiStore::Cluster {
             }
         }
 
-        ++data_node->version;
         data_node->ctx.store(nullptr);
         shared_ctx->max_depth = 4;
         return {ret, false};
@@ -644,6 +640,8 @@ namespace DiStore::Cluster {
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type12;
+                left->crc = crc_validate(left, left->type);
+                right->crc = crc_validate(right, right->type);
 
                 RemotePointer r;
                 if (breakdown) {
@@ -666,7 +664,6 @@ namespace DiStore::Cluster {
             }
         }
 
-        ++data_node->version;
         data_node->ctx.store(nullptr);
         shared_ctx->max_depth = 4;
         return {ret, false};
@@ -714,6 +711,8 @@ namespace DiStore::Cluster {
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type10;
+                left->crc = crc_validate(left, left->type);
+                right->crc = crc_validate(right, right->type);
 
                 if (breakdown) {
                     breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
@@ -735,6 +734,8 @@ namespace DiStore::Cluster {
 
                 left->type = LinkedNodeType::Type10;
                 right->type = LinkedNodeType::Type12;
+                left->crc = crc_validate(left, left->type);
+                right->crc = crc_validate(right, right->type);
 
                 if (breakdown) {
                     breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
@@ -756,6 +757,8 @@ namespace DiStore::Cluster {
 
                 left->type = LinkedNodeType::Type12;
                 right->type = LinkedNodeType::Type12;
+                left->crc = crc_validate(left, left->type);
+                right->crc = crc_validate(right, right->type);
 
                 if (breakdown) {
                     breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBackTwo);
@@ -775,7 +778,6 @@ namespace DiStore::Cluster {
             data_node->type = left->type;
         }
 
-        ++data_node->version;
         data_node->ctx.store(nullptr);
         shared_ctx->max_depth = 4;
         return {ret, false};
@@ -820,6 +822,7 @@ namespace DiStore::Cluster {
         if (!done)
             real->store(key, value);
         real->type = LinkedNodeType::Type16;
+        real->crc = crc_validate(real, real->type);
 
         Concurrency::ConcurrencyRequests *req = nullptr;
         while (shared_ctx->requests.try_pop(req)) {

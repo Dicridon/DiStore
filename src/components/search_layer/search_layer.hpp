@@ -9,7 +9,6 @@
 #include <atomic>
 #include <mutex>
 
-
 namespace DiStore::SearchLayer {
     using namespace Memory;
     namespace Constants {
@@ -21,7 +20,6 @@ namespace DiStore::SearchLayer {
         RemotePointer data_node;
         DataLayer::LinkedNodeType type;
         std::atomic<Concurrency::ConcurrencyContext *> ctx;
-        uint64_t version;
         SkipListNode *backward;
         SkipListNode *forwards[];
 
@@ -34,7 +32,6 @@ namespace DiStore::SearchLayer {
             auto anchor = new (buffer) std::string;
             anchor->assign(k);
             auto ret = reinterpret_cast<SkipListNode *>(buffer);
-            ret->version = 0;
             ret->forwards[0] = n;
             ret->backward = b;
             for (int i = 1; i < level; i++) {
