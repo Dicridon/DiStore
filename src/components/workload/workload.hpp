@@ -127,6 +127,7 @@ namespace DiStore::Workload {
         YCSB_D,
         YCSB_E,
         YCSB_L,
+        YCSB_R,
     };
 
     enum class YCSBOperation {
@@ -195,6 +196,8 @@ namespace DiStore::Workload {
                 }
             case YCSBWorkloadType::YCSB_L:
                 return {YCSBOperation::Insert, k};
+            case YCSBWorkloadType::YCSB_R:
+                return {YCSBOperation::Scan, k};
             default:
                 throw std::invalid_argument("Unkown YCSB workload type");
             }

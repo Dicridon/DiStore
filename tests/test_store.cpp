@@ -116,7 +116,10 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                     operation.end(Stats::DiStoreOperationOps::Get);
                     break;
                 case Workload::YCSBOperation::Scan:
-                    return;
+                    operation.begin(Stats::DiStoreOperationOps::Scan);
+                    node->scan(op.second, 100, &breakdown);
+                    operation.end(Stats::DiStoreOperationOps::Scan);
+                    break;
                 default:
                     Debug::error("Unkown operation");
                     return;
@@ -274,6 +277,8 @@ auto main(int argc, char *argv[]) -> int {
             workload_type = Workload::YCSBWorkloadType::YCSB_C;
         } else if (workload == "L") {
             workload_type = Workload::YCSBWorkloadType::YCSB_L;
+        } else if (workload == "R") {
+            workload_type = Workload::YCSBWorkloadType::YCSB_R;
         } else {
             Debug::error("Other YCSB workloads are not supported\n");
             return -1;
