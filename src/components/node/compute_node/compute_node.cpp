@@ -225,7 +225,7 @@ namespace DiStore::Cluster {
         LinkedNode16 l[2], r[2];
         RDMAContext *rdma = nullptr;
         uint8_t flip = 0;
-        if (second && key >= second->anchor) {
+        if (second && key <= second->anchor) {
             fetch_two(first, second, l[flip], r[flip]);
         } else {
             auto n = remote_memory_allocator.fetch_as<LinkedNode16 *>(first->data_node, sizeof(LinkedNode16));
@@ -256,7 +256,7 @@ namespace DiStore::Cluster {
             total += l[flip].scan(key, count - total, ret);
             flip = (flip + 1) & 0x1;
             poll_fetch_two_async(rdma, r[flip], l[flip]);
-        } while (ret.size() < count);
+        } while (total < count);
 
         return total;
     }
@@ -333,12 +333,15 @@ namespace DiStore::Cluster {
         remote.next = to_target->next;
         remote.store(key, value);
 
+
+        remote.crc = crc_validate(reinterpret_cast<LinkedNode16 *>(&remote), remote.type);
         if (!remote_memory_allocator.write_to(larger, sizeof(LinkedNode12),
                                               reinterpret_cast<byte_ptr_t>(&remote))) {
             Debug::error("Failed to flush local nodes to remote at early stage\n");
             return false;
         }
 
+        remote.crc = crc_validate(reinterpret_cast<LinkedNode16 *>(&no_move), no_move->type);
         if (!remote_memory_allocator.write_to(smaller, sizeof(LinkedNode10),
                                               reinterpret_cast<byte_ptr_t>(no_move))) {
             Debug::error("Failed to flush local nodes to remote at early stage\n");
