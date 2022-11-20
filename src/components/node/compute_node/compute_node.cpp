@@ -184,7 +184,7 @@ namespace DiStore::Cluster {
             }
 
             buffer->crc = crc_validate(buffer, buffer->type);
-            
+
             if (breakdown) {
                 breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
                 remote_memory_allocator.write_to(node->data_node, DataLayer::sizeof_node(buffer->type));
@@ -341,7 +341,7 @@ namespace DiStore::Cluster {
             return false;
         }
 
-        remote.crc = crc_validate(reinterpret_cast<LinkedNode16 *>(&no_move), no_move->type);
+        no_move->crc = crc_validate(reinterpret_cast<LinkedNode16 *>(no_move), no_move->type);
         if (!remote_memory_allocator.write_to(smaller, sizeof(LinkedNode10),
                                               reinterpret_cast<byte_ptr_t>(no_move))) {
             Debug::error("Failed to flush local nodes to remote at early stage\n");
@@ -826,8 +826,6 @@ namespace DiStore::Cluster {
 
         if (!done)
             real->store(key, value);
-        real->type = LinkedNodeType::Type16;
-        real->crc = crc_validate(real, real->type);
 
         Concurrency::ConcurrencyRequests *req = nullptr;
         while (shared_ctx->requests.try_pop(req)) {
@@ -839,6 +837,9 @@ namespace DiStore::Cluster {
         }
 
         auto remote = allocate(sizeof(LinkedNode16));
+        real->type = LinkedNodeType::Type16;
+        real->crc = crc_validate(real, real->type);
+
         if (!remote_memory_allocator.write_to(remote, sizeof(LinkedNode16))) {
             Debug::error("Failed to write back to remote after eager morphing\n");
             return false;

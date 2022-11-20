@@ -134,7 +134,7 @@ namespace DiStore::DataLayer {
             auto total = 0UL;
             for (int i = 0; i < next; i++) {
                 if (ct - total > 0 &&
-                    key.compare(0, key.size(), (char *)&pairs[i].key[0], key.size()) >= 0) {
+                    key.compare(0, key.size(), (char *)&pairs[i].key[0], key.size()) <= 0) {
                     ret.emplace_back((char *)&pairs[i].value[0], Constants::VALLEN);
                     ++total;
                 }
