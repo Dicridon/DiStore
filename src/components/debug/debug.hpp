@@ -3,6 +3,7 @@
 
 #include "config/config.hpp"
 #include <cstdio>
+#include <cstdarg>
 namespace DiStore::Debug {
     auto info(const char *fmt, ...) -> void;
     auto warn(const char *fmt, ...) -> void;

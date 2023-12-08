@@ -4,6 +4,7 @@
 
 #include <random>
 #include <memory>
+#include <stdexcept>
 
 namespace DiStore::Workload {
     namespace Constants {

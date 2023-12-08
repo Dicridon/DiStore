@@ -1,5 +1,6 @@
 #ifndef __DISTORE__NODE__COMPUTE_NODE__COMPUTE_NODE__
 #define __DISTORE__NODE__COMPUTE_NODE__COMPUTE_NODE__
+#include "memory/remote_memory/remote_memory.hpp"
 #include "node/node.hpp"
 #include "memory/memory.hpp"
 #include "memory/compute_node/compute_node.hpp"
@@ -97,9 +98,9 @@ namespace DiStore::Cluster {
 
         tbb::concurrent_queue<CalibrateContext *> update_queue;
 
-        // nodes are kept locally if total number of nodes is less than LOCAL_MAX_NODES
+        // nodes are kept locally if total number of nodes is fewer than LOCAL_MAX_NODES
         bool remote_put;
-        DataLayer::LinkedNode10 *local_nodes[2];
+        DataLayer::LinkedNode10 *local_nodes[Constants::LOCAL_MAX_NODES];
         std::string local_anchors[2];
         std::mutex local_mutex;
 
@@ -186,8 +187,8 @@ namespace DiStore::Cluster {
         // pair[0], win the competition
         // pair[1], pointer to winner's ConcurrencyContext
         template<typename NodeType>
-        auto try_win(SkipListNode *data_node, Concurrency::ConcurrencyContextType t,
-                     Stats::Breakdown *breakdown)
+        auto try_win_for_update(SkipListNode *data_node, Concurrency::ConcurrencyContextType t,
+                                Stats::Breakdown *breakdown)
             -> std::pair<bool, Concurrency::ConcurrencyContext *>
         {
 
@@ -198,9 +199,16 @@ namespace DiStore::Cluster {
 
             Concurrency::ConcurrencyContext *expect = nullptr;
             auto shared_ctx = thread_cctx->second.get();
+
+            // context is not usable until the predecessor is also locked
             shared_ctx->type = t;
 
-            if (data_node->ctx.compare_exchange_strong(expect, shared_ctx)) {
+            auto r = data_node;
+
+            if (r->ctx.compare_exchange_strong(expect, shared_ctx)) {
+                // the spinning threads can now submit requests
+                shared_ctx->max_depth = 4;
+
                 // the only winner should remember to collect pending requests
                 // first process winner's own request
                 NodeType *buffer;
@@ -208,6 +216,7 @@ namespace DiStore::Cluster {
                     breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
                     buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
                                                                           sizeof(NodeType));
+
                     breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
                 } else {
                     buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
@@ -222,6 +231,110 @@ namespace DiStore::Cluster {
             return {false, expect};
         }
 
+        template<typename NodeType>
+        auto try_win_for_insert(SkipListNode *data_node, Concurrency::ConcurrencyContextType t,
+                     Stats::Breakdown *breakdown)
+            -> std::pair<bool, Concurrency::ConcurrencyContext *>
+        {
+
+            auto thread_cctx = cctx.find(std::this_thread::get_id());
+            if (thread_cctx == cctx.end()) {
+                throw std::runtime_error("Threads should always register before running\n");
+            }
+
+            Concurrency::ConcurrencyContext *expect = nullptr;
+            auto shared_ctx = thread_cctx->second.get();
+
+            // context is not usable until the predecessor is also locked
+            shared_ctx->max_depth = -1;
+            shared_ctx->type = t;
+
+            auto r = data_node;
+            auto l = data_node->backward;
+
+            if (r->ctx.compare_exchange_strong(expect, shared_ctx)) {
+                if (!l->ctx.compare_exchange_strong(expect, shared_ctx)) {
+                    shared_ctx->max_depth = 0;
+                    r->ctx = nullptr;
+                    return {false, nullptr};
+                }
+                // the spinning threads can now submit requests
+                shared_ctx->max_depth = 4;
+
+                // the only winner should remember to collect pending requests
+                // first process winner's own request
+                LinkedNode16 *buffer;
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
+                    // buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
+                    //                                                       sizeof(NodeType));
+                    buffer = fetch_two(l, r).first;
+
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
+                } else {
+                    // buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
+                    //                                                       sizeof(NodeType));
+                    buffer = fetch_two(l, r).first;
+                }
+                shared_ctx->user_context = buffer;
+                shared_ctx->max_depth = -1;
+
+                return {true, shared_ctx};
+            }
+
+            return {false, expect};
+        }
+
+        auto help_pred(LinkedNode16 *buf, const std::string &k,
+                       const std::string &v)
+            -> bool
+        {
+            switch (buf->type) {
+            case LinkedNodeType::Type16: {
+                return buf->store(k, v);
+            }
+            case LinkedNodeType::Type14: {
+                return reinterpret_cast<LinkedNode14 *>(buf)->store(k, v);
+            }
+            case LinkedNodeType::Type12: {
+                return reinterpret_cast<LinkedNode12 *>(buf)->store(k, v);
+            }
+            case LinkedNodeType::Type10: {
+                return reinterpret_cast<LinkedNode10 *>(buf)->store(k, v);
+            }
+            default:
+                return false;
+            }
+        }
+
+        template<typename NodeType>
+        auto help_others(Concurrency::ConcurrencyContext *shared_ctx, SkipListNode *data_node,
+                         LinkedNode16 *pred_buffer, NodeType *real_buffer)
+            -> void
+        {
+            Concurrency::ConcurrencyRequests *req = nullptr;
+            const std::string *k = nullptr;
+            const std::string *v = nullptr;
+            bool s = false;
+            while (shared_ctx->requests.try_pop(req)) {
+                k = reinterpret_cast<const std::string *>(req->tag);
+                v = reinterpret_cast<const std::string *>(req->content);
+
+                if (*k < data_node->anchor) {
+                    s = help_pred(pred_buffer, *k, *v);
+                } else {
+                    s = real_buffer->store(*k, *v);
+                }
+                if (!s) {
+                    shared_ctx->requests.push(req);
+                    break;
+                } else {
+                    req->succeed = s;
+                    req->retry = false;
+                    req->is_done = true;
+                }
+            }
+        }
         // pair[0], whether current key-value is put
         // pair[1], toal number of all pending requests including current key-value
         template<typename NodeType>
@@ -230,44 +343,34 @@ namespace DiStore::Cluster {
                                       Stats::Breakdown *breakdown)
             -> std::pair<bool, size_t>
         {
-            auto node_buffer = reinterpret_cast<NodeType *>(shared_ctx->user_context);
 
-            if (node_buffer->store(key, value)) {
-                Concurrency::ConcurrencyRequests *req = nullptr;
-                while (shared_ctx->requests.try_pop(req)) {
-                    auto s = node_buffer->store(*reinterpret_cast<const std::string *>(req->tag),
-                                                *reinterpret_cast<const std::string *>(req->content));
-                    if (!s) {
-                        shared_ctx->requests.push(req);
-                        break;
-                    } else {
-                        req->succeed = s;
-                        req->retry = false;
-                        req->is_done = true;
-                    }
-                }
-
-                if (shared_ctx->requests.unsafe_size() == 0) {
-                    bool ret = false;
-                    if (breakdown) {
-                        breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
-                        ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
-                        breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
-                    } else {
-                        ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
-                    }
-                    if(ret) {
-                        return {true, 0};
-                    } else {
-                        Debug::error("Failed to write back to remote\n");
-                        return {false, 0};
-                    }
-                }
-                return {true, shared_ctx->requests.unsafe_size()};
+            auto pred_buffer = reinterpret_cast<LinkedNode16 *>(shared_ctx->user_context);
+            auto real_buffer = reinterpret_cast<NodeType *>(pred_buffer + 1);
+            if (!real_buffer->store(key, value)) {
+                // current key-value is not put
+                return {false, shared_ctx->requests.unsafe_size() + 1};
             }
 
-            // current key-value is not put
-            return {false, shared_ctx->requests.unsafe_size() + 1};
+            help_others(shared_ctx, data_node, pred_buffer, real_buffer);
+
+            if (shared_ctx->requests.unsafe_size() == 0) {
+                bool ret = false;
+                if (breakdown) {
+                    breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+                    ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
+                    breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
+                } else {
+                    ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
+                }
+                if(ret) {
+                    return {true, 0};
+                } else {
+                    Debug::error("Failed to write back to remote\n");
+                    return {false, 0};
+                }
+            }
+            return {true, shared_ctx->requests.unsafe_size()};
+
         }
 
         // find out the true type of a LinkedNode
@@ -298,8 +401,10 @@ namespace DiStore::Cluster {
                           const std::string &value, Stats::Breakdown *breakdown)
             -> std::pair<bool, bool>;
 
-        auto eager_morph(SkipListNode *data_node, Concurrency::ConcurrencyContext *shared_ctx,
-                         const std::string &key, const std::string &value, bool done) -> bool;
+        auto eager_morph(SkipListNode *data_node, LinkedNode16 *real,
+                         Concurrency::ConcurrencyContext *shared_ctx,
+                         const std::string &key, const std::string &value, bool done)
+            -> bool;
 
         template<typename NodeType>
         auto construct_reorder_map(NodeType *source_buffer, int left_cap,
@@ -336,15 +441,46 @@ namespace DiStore::Cluster {
         auto inplace_split_node(LinkedNode16 *source_buffer, size_t left_cap)
             -> std::tuple<LinkedNode16 *, LinkedNode16 *, std::string>;
 
-        auto out_of_place_split_node(LinkedNode16 *source_buffer,
+        auto out_of_place_split_node(SkipListNode *data_node, LinkedNode16 *pred,
+                                     LinkedNode16 *source_buffer,
                                      Concurrency::ConcurrencyContext *shared_ctx,
                                      size_t left_cap, const std::string &key,
                                      const std::string &value, bool done)
             -> std::tuple<LinkedNode16 *, LinkedNode16 *, std::string>;
 
         // return the address of newly allocated right
+        auto write_back_morphed(SkipListNode *data_node, LinkedNode16 *pred,
+                                 LinkedNode16 *morphed)
+            -> RemotePointer
+        {
+            auto r = allocate(DataLayer::sizeof_node(morphed->type));
+            pred->rlink = r;
+            auto rdma = remote_memory_allocator.get_rdma(r);
+            auto p_sge = rdma->generate_sge(nullptr, DataLayer::sizeof_node(pred->type), 0);
+            auto r_sge = rdma->generate_sge(nullptr, DataLayer::sizeof_node(morphed->type),
+                                            sizeof(LinkedNode16));
+
+            auto wr_p = rdma->generate_send_wr(0, p_sge.get(), 1,
+                                               data_node->backward->data_node.get_as<byte_ptr_t>(),
+                                               nullptr);
+            auto wr_r = rdma->generate_send_wr(1, r_sge.get(), 1, r.get_as<byte_ptr_t>(), nullptr);
+            wr_p->send_flags = 0;
+            wr_p->next = wr_r.get();
+
+            rdma->post_batch_write(wr_p.get());
+
+            if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
+                // data_node->data_node = l;
+                return nullptr;
+            }
+
+            data_node->data_node = r;
+            return r;
+        }
+
         template<typename LNodeType, typename RNodeType>
-        auto write_back_two(SkipListNode *data_node, LinkedNode16 *left, LinkedNode16 *right)
+        auto write_back_splitted(SkipListNode *data_node, LinkedNode16 *pred,
+                                 LinkedNode16 *left, LinkedNode16 *right)
             -> RemotePointer
         {
             auto l = allocate(sizeof(LNodeType));
@@ -352,34 +488,40 @@ namespace DiStore::Cluster {
 
             // actually we do not need a doubly-linked strucutre, the data layer is just like a
             // level in the blink tree.
+            pred->rlink = l;
             right->rlink = left->rlink;
             left->rlink = r;
 
             // for implementation simplicity, we assume only one MN``
             auto rdma = remote_memory_allocator.get_rdma(l);
-            auto l_sge = rdma->generate_sge(nullptr, sizeof(LNodeType), 0);
-            auto r_sge = rdma->generate_sge(nullptr, sizeof(RNodeType), sizeof(LinkedNode16));
+            auto p_sge = rdma->generate_sge(nullptr, DataLayer::sizeof_node(pred->type), 0);
+            auto l_sge = rdma->generate_sge(nullptr, sizeof(LNodeType), sizeof(LinkedNode16));
+            auto r_sge = rdma->generate_sge(nullptr, sizeof(RNodeType), 2 * sizeof(LinkedNode16));
 
-            auto wr_l = rdma->generate_send_wr(0, l_sge.get(), 1, l.get_as<byte_ptr_t>(), nullptr);
-            auto wr_r = rdma->generate_send_wr(1, r_sge.get(), 1, r.get_as<byte_ptr_t>(), nullptr);
+            auto wr_p = rdma->generate_send_wr(0, p_sge.get(), 1,
+                                               data_node->backward->data_node.get_as<byte_ptr_t>(),
+                                               nullptr);
+            auto wr_l = rdma->generate_send_wr(1, l_sge.get(), 1, l.get_as<byte_ptr_t>(), nullptr);
+            auto wr_r = rdma->generate_send_wr(2, r_sge.get(), 1, r.get_as<byte_ptr_t>(), nullptr);
 
+            wr_p->send_flags = 0;
+            wr_p->next = wr_l.get();
             wr_l->send_flags = 0;
             wr_l->next = wr_r.get();
 
-            rdma->post_batch_write(wr_l.get());
+            rdma->post_batch_write(wr_p.get());
 
             if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
-                data_node->data_node = l;
+                // data_node->data_node = l;
                 return nullptr;
             }
 
             data_node->data_node = l;
-
             return r;
         }
 
-        auto fetch_two(SkipListNode *left, SkipListNode *right, LinkedNode16 &l, LinkedNode16 &r)
-            -> bool
+        auto fetch_two(SkipListNode *left, SkipListNode *right)
+            -> std::pair<LinkedNode16 *, LinkedNode16 *>
         {
             auto rdma = remote_memory_allocator.get_rdma(left->data_node);
 
@@ -396,17 +538,39 @@ namespace DiStore::Cluster {
 
             rdma->post_batch_read(wr_l.get());
             if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
+                return {nullptr, nullptr};
+            }
+
+            auto buf = reinterpret_cast<LinkedNode16 *>(rdma->get_edible_buf());
+
+            return {buf, buf + 1};
+        }
+
+
+
+        auto fetch_two_into_buffer(SkipListNode *left, SkipListNode *right,
+                                   LinkedNode16 *l, LinkedNode16 *r)
+            -> bool
+        {
+            auto [lb, rb] = fetch_two(left, right);
+
+            if (!lb || !rb) {
                 return false;
             }
 
-            auto buf = reinterpret_cast<const LinkedNode16 *>(rdma->get_buf());
-            memcpy(&l, buf, sizeof(LinkedNode16));
-            memcpy(&r, buf + 1, sizeof(LinkedNode16));
+            if (l) {
+                memcpy(l, lb, sizeof(LinkedNode16));
+            }
+
+            if (r) {
+                memcpy(r, rb, sizeof(LinkedNode16));
+            }
 
             return true;
         }
 
         /*
+         *
          * This method tries to fetch two data node from remote memory with batched requests
          * without waiting the completion
          *

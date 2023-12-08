@@ -3,7 +3,9 @@
 
 #include "memory/memory.hpp"
 
+#include <string>
 #include <cstring>
+#include <algorithm>
 namespace DiStore {
     using namespace Memory;
     struct DiStoreStringHeader {

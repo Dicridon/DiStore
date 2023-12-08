@@ -173,6 +173,10 @@ namespace DiStore::RDMAUtil {
         // return the address of the start of the write location
         auto fill_buf(uint8_t *msg, size_t msg_len, size_t offset = 0) -> byte_ptr_t;
 
+        inline auto get_edible_buf() -> void * {
+            return buf;
+        }
+
         inline auto get_buf() const noexcept -> const void * {
             return buf;
         }

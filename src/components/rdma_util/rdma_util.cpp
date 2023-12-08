@@ -197,7 +197,6 @@ namespace DiStore::RDMAUtil {
         struct ibv_sge sg;
         struct ibv_recv_wr wr;
         struct ibv_recv_wr *bad_wr;
-
         auto tmp = (uint8_t *)buf + offset;
         memset(&sg, 0, sizeof(sg));
         sg.addr	  = (uintptr_t)tmp;
@@ -356,7 +355,7 @@ namespace DiStore::RDMAUtil {
         if (!membuf || !cqe) {
             return {nullptr, Status::InvalidArguments};
         }
-
+        
         if (!(rdma_ctx->pd = ibv_alloc_pd(ctx))) {
             return {nullptr, Status::CannotAllocPD};
         }

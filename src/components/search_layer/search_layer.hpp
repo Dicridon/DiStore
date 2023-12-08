@@ -8,7 +8,6 @@
 
 #include <atomic>
 #include <mutex>
-
 namespace DiStore::SearchLayer {
     using namespace Memory;
     namespace Constants {

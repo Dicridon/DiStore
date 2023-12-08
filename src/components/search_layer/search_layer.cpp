@@ -150,12 +150,12 @@ namespace DiStore::SearchLayer {
         for (int i = 0; i < current_level; i++) {
             level_length[i] = 0;
         }
-        
+
         for (int i = current_level - 1; i >= 0; i--) {
             auto walker = head;
             while(walker->forwards[i]) {
                 ++level_length[i];
-                ++total_nodes;                
+                ++total_nodes;
                 walker = walker->forwards[i];
             }
         }
