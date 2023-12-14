@@ -26,7 +26,8 @@ namespace DiStore::SearchLayer {
             update[i]->forwards[i] = new_node;
         }
 
-        new_node->backward = (update[0] == head) ? nullptr : update[0];
+        // new_node->backward = (update[0] == head) ? nullptr : update[0];
+        new_node->backward = update[0];
         if (new_node->forwards[0])
             new_node->forwards[0]->backward = new_node;
         return true;

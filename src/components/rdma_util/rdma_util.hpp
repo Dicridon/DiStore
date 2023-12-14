@@ -122,6 +122,13 @@ namespace DiStore::RDMAUtil {
 
         auto default_connect(int socket) -> int;
 
+        // connect to a remote node whose qp information is already obtained
+        // I use this to store a parallel rdma ctx to speed up batch read
+        auto default_connect_to_known(const connection_certificate &r) -> int;
+
+        // get the qp to rts state with default configurations
+        auto default_get_qp_ready() -> int;
+
         auto modify_qp(struct ibv_qp_attr &, int mask) noexcept -> StatusPair;
         auto exchange_certificate(int sockfd) noexcept -> Status;
 

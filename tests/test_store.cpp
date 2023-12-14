@@ -4,6 +4,7 @@
 #include "workload/workload.hpp"
 #include "stats/stats.hpp"
 #include <chrono>
+#include <stdexcept>
 
 using namespace CmdParser;
 using namespace DiStore;
@@ -126,15 +127,15 @@ auto launch_compute_ycsb(const std::string &config, const std::string &memory_no
                 }
 
                 if (++total_counter == sample_batch * 100) {
+                    breakdown.submit(breakdown_collectors[tid]);
+                    operation.submit(operation_collectors[tid]);
                     print_lock.lock();
                     std::cout << "Thread " << tid << " reporting\n";
                     breakdown.report();
                     operation.report();
                     print_lock.unlock();
                     total_counter = 0;
-                    breakdown.submit(breakdown_collectors[tid]);
                     breakdown.clear();
-                    operation.submit(operation_collectors[tid]);
                     operation.clear();
                 }
             }

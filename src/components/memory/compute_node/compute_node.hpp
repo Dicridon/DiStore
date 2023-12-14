@@ -1,5 +1,6 @@
 #ifndef __DISTORE__MEMORY__COMPUTE_NODE__COMPUTE_NODE__
 #define __DISTORE__MEMORY__COMPUTE_NODE__COMPUTE_NODE__
+#include "data_layer/data_layer.hpp"
 #include "node/node.hpp"
 #include "memory/memory.hpp"
 #include "memory/remote_memory/remote_memory.hpp"
@@ -248,6 +249,7 @@ namespace DiStore::Memory {
         int current;
         std::vector<std::unique_ptr<Cluster::MemoryNodeInfo>> memory_nodes;
         std::unordered_map<std::thread::id, std::vector<std::unique_ptr<RDMAContext>>> rdma_ctxs;
+        std::unordered_map<std::thread::id, std::vector<std::unique_ptr<RDMAContext>>> parallel_rdma_ctxs;
         RPCWrapper::ClientRPCContext *rpc_ctx;
 
         std::mutex init_mutex;
@@ -271,12 +273,13 @@ namespace DiStore::Memory {
         auto setup_rdma_per_thread(RDMADevice *device) -> bool;
 
         auto get_rdma(RemotePointer rem) -> RDMAContext *;
+        auto get_parallel_rdma(RemotePointer rem) -> RDMAContext *;
 
 
         // The underlying RDMA buffer is directly returned to user to avoid message copy
         template<typename T,
                  typename = typename std::enable_if<std::is_pointer_v<T>>>
-        auto fetch_as(const RemotePointer &p, size_t size) -> T {
+        auto fetch_as(const RemotePointer &p, size_t size, size_t local_offset = 0) -> T {
             auto node_id = p.get_node();
             auto addr = p.get_as<byte_ptr_t>();
 
@@ -291,7 +294,7 @@ namespace DiStore::Memory {
 
             auto ctx = ctxs->second[node_id].get();
 
-            ctx->post_read(addr, size);
+            ctx->post_read(addr, size, local_offset);
             ctx->poll_one_completion();
 
             return reinterpret_cast<T>(ctx->buf);
@@ -314,6 +317,25 @@ namespace DiStore::Memory {
             if (wc)
                 return false;
             return true;
+        }
+
+        // write a content in the buffer that is already filled by fetch_two
+        auto write_back_current(const RemotePointer &p, size_t size) -> bool {
+            auto node_id = p.get_node();
+            auto addr = p.get_as<byte_ptr_t>();
+
+            auto id = std::this_thread::get_id();
+
+            auto ctxs = rdma_ctxs.find(id);
+
+            auto ctx = ctxs->second[node_id].get();
+
+            ctx->post_write(addr, nullptr, size, sizeof(DataLayer::LinkedNode16));
+            auto [wc, _] = ctx->poll_one_completion();
+            if (wc)
+                return false;
+            return true;
+            
         }
 
         auto get_base_addr(int node_id) -> RemotePointer;

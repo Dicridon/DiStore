@@ -14,7 +14,8 @@ namespace DiStore::Stats {
 
         DataLayerFetch,
         DataLayerWriteBack,
-        DataLayerWriteBackTwo,
+        DataLayerWriteMorphed,
+        DataLayerWriteSplitted,
         DataLayerMorph,
         DataLayerSplit,
         DataLayerContention,
@@ -69,6 +70,11 @@ namespace DiStore::Stats {
 
         auto submit(StatsCollector &collector) noexcept -> void {
             for (auto &k : ops_table) {
+                auto tmp_arr = tmp[k];
+                if (tmp_arr.size() != 0) {
+                    results[k].push_back(Misc::avg(tmp_arr));
+                    tmp_arr.clear();
+                }
                 auto &arr = results[k];
                 std::sort(arr.begin(), arr.end(), std::greater<>());
                 collector.submit(decode_breakdown(k),
@@ -90,10 +96,10 @@ namespace DiStore::Stats {
         constexpr static DiStoreBreakdownOps ops_table[] = {
             DiStoreBreakdownOps::SearchLayerSearch,
             DiStoreBreakdownOps::SearchLayerUpdate,
-
-            DiStoreBreakdownOps::DataLayerFetch,
             DiStoreBreakdownOps::DataLayerWriteBack,
-            DiStoreBreakdownOps::DataLayerWriteBackTwo,
+            DiStoreBreakdownOps::DataLayerFetch,
+            DiStoreBreakdownOps::DataLayerWriteMorphed,
+            DiStoreBreakdownOps::DataLayerWriteSplitted,
             DiStoreBreakdownOps::DataLayerMorph,
             DiStoreBreakdownOps::DataLayerSplit,
             DiStoreBreakdownOps::DataLayerContention,
@@ -117,8 +123,10 @@ namespace DiStore::Stats {
                 return "DataLayerFetch";
             case DiStoreBreakdownOps::DataLayerWriteBack:
                 return "DataLayerWriteBack";
-            case DiStoreBreakdownOps::DataLayerWriteBackTwo:
-                return "DataLayerWriteBackTwo";
+            case DiStoreBreakdownOps::DataLayerWriteMorphed:
+                return "DataLayerWriteMorphed";
+            case DiStoreBreakdownOps::DataLayerWriteSplitted:
+                return "DataLayerWriteWriteSplitted";
             case DiStoreBreakdownOps::DataLayerMorph:
                 return "DataLayerMorph";
             case DiStoreBreakdownOps::DataLayerSplit:

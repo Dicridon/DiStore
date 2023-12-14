@@ -1,4 +1,5 @@
 #include "rdma_util.hpp"
+#include <chrono>
 namespace DiStore::RDMAUtil {
     auto decode_rdma_status(const Enums::Status& status) -> std::string {
         switch(status){
@@ -54,6 +55,15 @@ namespace DiStore::RDMAUtil {
 
         Debug::info("Certificate exchanged\n");
 
+        return default_get_qp_ready();
+    }
+
+    auto RDMAContext::default_connect_to_known(const connection_certificate &r) -> int {
+        memcpy(&remote, &r, sizeof(remote));
+        return default_get_qp_ready();
+    }
+
+    auto RDMAContext::default_get_qp_ready() -> int {
         auto init_attr = RDMADevice::get_default_qp_init_state_attr();
         if (auto [status, err] = modify_qp(*init_attr, RDMADevice::get_default_qp_init_state_attr_mask()); status != Status::Ok) {
             Debug::error("Modify QP to Init failed, error code: %d\n", err);
@@ -73,7 +83,6 @@ namespace DiStore::RDMAUtil {
         }
         return 0;
     }
-
 
     auto RDMAContext::modify_qp(struct ibv_qp_attr &attr, int mask) noexcept -> StatusPair {
         if (auto ret =  ibv_modify_qp(qp, &attr, mask); ret == 0) {
@@ -355,7 +364,7 @@ namespace DiStore::RDMAUtil {
         if (!membuf || !cqe) {
             return {nullptr, Status::InvalidArguments};
         }
-        
+
         if (!(rdma_ctx->pd = ibv_alloc_pd(ctx))) {
             return {nullptr, Status::CannotAllocPD};
         }

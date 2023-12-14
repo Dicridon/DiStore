@@ -15,7 +15,7 @@ namespace DiStore::Cluster {
         memcpy(resp.buf, &rem_buf, sizeof(Memory::RemotePointer));
         rpc_ctx->info->rpc->enqueue_response(req_handle, &resp);
 
-        Debug::info("Remote memory segment offered\n");
+        Debug::info("Remote memory segment offered at %p\n", rem_buf);
     }
 
     auto MemoryNode::deallocation_handler(erpc::ReqHandle *req_handle, void *ctx) -> void {

@@ -13,6 +13,9 @@
 #include "stats/stats.hpp"
 #include "stats/breakdown/breakdown.hpp"
 #include "stats/operation/operation.hpp"
+#include <chrono>
+#include <infiniband/verbs.h>
+#include <ratio>
 
 namespace DiStore::Cluster {
     using namespace RPCWrapper;
@@ -236,7 +239,6 @@ namespace DiStore::Cluster {
                      Stats::Breakdown *breakdown)
             -> std::pair<bool, Concurrency::ConcurrencyContext *>
         {
-
             auto thread_cctx = cctx.find(std::this_thread::get_id());
             if (thread_cctx == cctx.end()) {
                 throw std::runtime_error("Threads should always register before running\n");
@@ -265,17 +267,33 @@ namespace DiStore::Cluster {
                 // first process winner's own request
                 LinkedNode16 *buffer;
                 if (breakdown) {
+                    // We stored the real node in the second LinkedNode16, the first is reserved for
+                    // updating the predecessor's RLink after morphing or splitting
                     breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerFetch);
                     // buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
-                    //                                                       sizeof(NodeType));
-                    buffer = fetch_two(l, r).first;
+                    //                                                       sizeof(NodeType),
+                    //                                                       sizeof(LinkedNode16));
+                    // no idea why fetch_two is so slow
+                    // buffer = fetch_two(l, r).first;
+
+                    // we have only one MN, so the following code should work
+                    // Fuck Mellanox that I have to use TWO contexts for authentic parallel read
+                    auto rdma = remote_memory_allocator.get_rdma(l->data_node);
+                    auto prdma = remote_memory_allocator.get_parallel_rdma(l->data_node);
+                    rdma->post_read(r->data_node.get_as<byte_ptr_t>(), sizeof_node(r->type), sizeof(LinkedNode16));
+                    prdma->post_read(l->data_node.get_as<byte_ptr_t>(), sizeof_node(l->type));
+                    rdma->poll_one_completion();
+                    prdma->poll_one_completion();
+                    buffer = reinterpret_cast<LinkedNode16 *>(rdma->get_edible_buf());
 
                     breakdown->end(Stats::DiStoreBreakdownOps::DataLayerFetch);
                 } else {
                     // buffer = remote_memory_allocator.fetch_as<NodeType *>(data_node->data_node,
-                    //                                                       sizeof(NodeType));
+                    //                                                       sizeof(NodeType),
+                    //                                                       sizeof(LinkedNode16));
                     buffer = fetch_two(l, r).first;
                 }
+
                 shared_ctx->user_context = buffer;
                 shared_ctx->max_depth = -1;
 
@@ -322,13 +340,15 @@ namespace DiStore::Cluster {
 
                 if (*k < data_node->anchor) {
                     s = help_pred(pred_buffer, *k, *v);
+                    req->succeed = s;
+                    req->retry = !s;
+                    req->is_done = true;
                 } else {
                     s = real_buffer->store(*k, *v);
-                }
-                if (!s) {
-                    shared_ctx->requests.push(req);
-                    break;
-                } else {
+                    if (!s) {
+                        shared_ctx->requests.push(req);
+                        break;
+                    }
                     req->succeed = s;
                     req->retry = false;
                     req->is_done = true;
@@ -357,10 +377,10 @@ namespace DiStore::Cluster {
                 bool ret = false;
                 if (breakdown) {
                     breakdown->begin(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
-                    ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
+                    ret = remote_memory_allocator.write_back_current(data_node->data_node, sizeof(NodeType));
                     breakdown->end(Stats::DiStoreBreakdownOps::DataLayerWriteBack);
                 } else {
-                    ret = remote_memory_allocator.write_to(data_node->data_node, sizeof(NodeType));
+                    ret = remote_memory_allocator.write_back_current(data_node->data_node, sizeof(NodeType));
                 }
                 if(ret) {
                     return {true, 0};
@@ -454,8 +474,9 @@ namespace DiStore::Cluster {
             -> RemotePointer
         {
             auto r = allocate(DataLayer::sizeof_node(morphed->type));
-            pred->rlink = r;
             auto rdma = remote_memory_allocator.get_rdma(r);
+            pred->rlink = r;
+
             auto p_sge = rdma->generate_sge(nullptr, DataLayer::sizeof_node(pred->type), 0);
             auto r_sge = rdma->generate_sge(nullptr, DataLayer::sizeof_node(morphed->type),
                                             sizeof(LinkedNode16));
@@ -525,21 +546,38 @@ namespace DiStore::Cluster {
         {
             auto rdma = remote_memory_allocator.get_rdma(left->data_node);
 
-            auto l_sge = rdma->generate_sge(nullptr, sizeof_node(left->type), 0);
-            auto r_sge = rdma->generate_sge(nullptr, sizeof_node(right->type), sizeof(LinkedNode16));
+            // auto l_sge = rdma->generate_sge(nullptr, sizeof_node(left->type), 0);
+            // auto r_sge = rdma->generate_sge(nullptr, sizeof_node(right->type), sizeof(LinkedNode16));
+            //
+            // auto wr_l = rdma->generate_send_wr(0, l_sge.get(), 1, left->data_node.get_as<byte_ptr_t>(),
+            //                                    nullptr, IBV_WR_RDMA_READ);
+            // auto wr_r = rdma->generate_send_wr(0, r_sge.get(), 1, right->data_node.get_as<byte_ptr_t>(),
+            //                                    nullptr, IBV_WR_RDMA_READ);
 
-            auto wr_l = rdma->generate_send_wr(0, l_sge.get(), 1, left->data_node.get_as<byte_ptr_t>(),
-                                               nullptr, IBV_WR_RDMA_READ);
-            auto wr_r = rdma->generate_send_wr(0, l_sge.get(), 1, right->data_node.get_as<byte_ptr_t>(),
-                                               nullptr, IBV_WR_RDMA_READ);
+            // wr_l->send_flags = 0;
+            // wr_l->next = wr_r.get();
+            //
+            // rdma->post_batch_read(wr_l.get());
+            // if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
+            //     return {nullptr, nullptr};
+            // }
+            //
 
-            wr_l->send_flags = 0;
-            wr_l->next = wr_r.get();
-
-            rdma->post_batch_read(wr_l.get());
-            if (auto [wc, _] = rdma->poll_one_completion(); wc != nullptr) {
-                return {nullptr, nullptr};
-            }
+            auto bps = std::chrono::steady_clock::now();
+            rdma->post_read(right->data_node.get_as<byte_ptr_t>(), sizeof_node(right->type), sizeof(LinkedNode16));
+            rdma->post_read(left->data_node.get_as<byte_ptr_t>(), sizeof_node(left->type));
+            auto bpe = std::chrono::steady_clock::now();
+            std::cout << "batch post takes " << std::chrono::duration_cast<std::chrono::microseconds>(bpe - bps).count() << "\n";
+            
+            auto fs = std::chrono::steady_clock::now();
+            rdma->poll_one_completion();
+            auto fe = std::chrono::steady_clock::now();
+            auto ss = std::chrono::steady_clock::now();
+            rdma->poll_one_completion();
+            auto se = std::chrono::steady_clock::now();
+             
+            std::cout << "First poll takes " << std::chrono::duration_cast<std::chrono::microseconds>(fe - fs).count() << "\n";
+            std::cout << "Second poll takes " << std::chrono::duration_cast<std::chrono::microseconds>(se - ss).count() << "\n";
 
             auto buf = reinterpret_cast<LinkedNode16 *>(rdma->get_edible_buf());
 

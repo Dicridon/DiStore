@@ -1,4 +1,5 @@
 #include "compute_node.hpp"
+#include "rdma_util/rdma_util.hpp"
 
 namespace DiStore::Memory {
     auto PageMirror::allocate() -> RemotePointer {
@@ -269,11 +270,12 @@ namespace DiStore::Memory {
             return true;
 
         std::vector<std::unique_ptr<RDMAContext>> rdma;
+        std::vector<std::unique_ptr<RDMAContext>> parallel_rdma;
 
         auto common_buffer = new byte_t[8192];
         for (const auto &n : memory_nodes) {
             auto socket = Misc::socket_connect(false, n->roce_port, n->roce_addr.to_string().c_str());
-            auto [rdma_ctx, status] = device->open(common_buffer, 8192, 1,
+            auto [rdma_ctx, status] = device->open(common_buffer, 8192, 5,
                                                    RDMADevice::get_default_mr_access(),
                                                    *RDMADevice::get_default_qp_init_attr());
 
@@ -287,13 +289,33 @@ namespace DiStore::Memory {
                 Debug::error("Failed to establish RDMA with node %d\n", n->node_id);
                 return false;
             }
-
             Debug::info("RDMA with node %d established\n", n->node_id);
+
+            auto psocket = Misc::socket_connect(false, n->roce_port, n->roce_addr.to_string().c_str());
+            auto [prdma_ctx, pstatus] = device->open(common_buffer, 8192, 5,
+                                                     RDMADevice::get_default_mr_access(),
+                                                     *RDMADevice::get_default_qp_init_attr());
+            if (pstatus != RDMAUtil::Enums::Status::Ok) {
+                Debug::error(">> Failed to open device for parallel context due to %s\n",
+                             RDMAUtil::decode_rdma_status(status).c_str());
+                return false;
+            }
+            
+            if (prdma_ctx->default_connect(psocket) != 0) {
+                Debug::error("Failed to establish parallel RDMA with node %d\n", n->node_id);
+                return false;
+            }
+            Debug::info("parallel RDMA with node %d established\n", n->node_id);
             rdma.push_back(std::move(rdma_ctx));
+            parallel_rdma.push_back(std::move(prdma_ctx));
+            
+            close(socket);
+            close(psocket);
         }
 
         std::scoped_lock<std::mutex> _(init_mutex);
         rdma_ctxs.insert({id, std::move(rdma)});
+        parallel_rdma_ctxs.insert({id, std::move(parallel_rdma)});
         return true;
     }
 
@@ -306,6 +328,17 @@ namespace DiStore::Memory {
 
         return rdma->second[remote.get_node()].get();
     }
+
+    auto RemoteMemoryManager::get_parallel_rdma(RemotePointer remote) -> RDMAContext * {
+        auto rdma = parallel_rdma_ctxs.find(std::this_thread::get_id());
+        if (rdma == parallel_rdma_ctxs.end()) {
+            Debug::warn("Do remember to setup_rdma_per_thread before running\n");
+            return nullptr;
+        }
+
+        return rdma->second[remote.get_node()].get();
+    }
+
 
     auto RemoteMemoryManager::get_base_addr(int node_id) -> RemotePointer {
         return memory_nodes[node_id]->base_addr;

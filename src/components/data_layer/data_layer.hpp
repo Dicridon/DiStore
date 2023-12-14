@@ -181,6 +181,7 @@ namespace DiStore::DataLayer {
         // checking number of KVs in this node and change type accordingly
     };
 
+    using LinkedNodeHead = LinkedNode<1, 1>;
     using LinkedNode10 = LinkedNode<16, 10>;
     using LinkedNode12 = LinkedNode<16, 12>;
     using LinkedNode14 = LinkedNode<16, 14>;
@@ -189,6 +190,8 @@ namespace DiStore::DataLayer {
 
     inline static auto sizeof_node(Enums::LinkedNodeType t) -> size_t {
         switch(t) {
+        case LinkedNodeType::TypeHead:
+            return sizeof(LinkedNodeHead);
         case LinkedNodeType::Type10:
             return sizeof(LinkedNode10);
         case LinkedNodeType::Type12:

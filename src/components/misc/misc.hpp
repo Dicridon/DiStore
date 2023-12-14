@@ -1,5 +1,6 @@
 #ifndef __DISTORE__MISC__MISC__
 #define __DISTORE__MISC__MISC__
+#include <type_traits>
 #define UNUSED(x) (void)(x)
 #define FOR_FUTURE(x) (void)(x)
 #include <iostream>
@@ -86,5 +87,15 @@ namespace DiStore::Misc {
     auto p999(const std::vector<T> &sorted) -> T {
         return percentile(sorted, 99.9);
     }
+
+    template<typename T,
+             typename = std::enable_if_t<std::is_invocable_v<T>>>
+    struct Defer {
+        T func;
+        Defer(T f) : func(f) {};
+        ~Defer() {
+            func();
+        }
+    };
 }
 #endif

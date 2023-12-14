@@ -91,6 +91,10 @@ namespace DiStore::SearchLayer {
             return {new_node, level};
         }
 
+        inline auto fake_head(RemotePointer valid) -> void {
+            head->data_node = valid;
+        }
+
         auto insert(const std::string &anchor, const RemotePointer &r, DataLayer::LinkedNodeType t) noexcept
             -> bool;
         auto update(const std::string &anchor, const RemotePointer &r, DataLayer::LinkedNodeType t) noexcept
