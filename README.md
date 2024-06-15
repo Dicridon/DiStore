@@ -4,15 +4,22 @@ This is the source code of paper **DiStore: A Full-Memory-Disaggregation-Friendl
 ## Compile
 The `Makefile` can be used to build the targets. `make tests` will produce all runnable binaries used by DiStore in the directory `target`. If errors occurs, please use Ruby gem `canoe` and command `canoe test store` to build DiStore. You will find it helpful to visit `canoe`'s tutorial at [canoe](https://github.com/Dicridon/canoe "canoe, cargo for C++").
 
+A `compile_commands.json` file is already included in this repo. Any text editors (Emacs/Vim/VSCode) or IDE that uses `compile_commands.json` for LSP utility should work well with it.
+
 ## Run
 There are many parameters
-- `--type, -t compute/memory`, specify the role of current machine, either a compute node (CN) or memory node (MN).
-- `--config, -c /path/to/config/file`, CN (or MN) should have config files to set up networks. Configure file format is explained later.
+- `--type, -t compute/memory` specifies the role of current machine, either a compute node (CN) or memory node (MN).
+- `--config, -c /path/to/config/file`. CN (or MN) should have config files to set up networks. Configure file format is explained in the next section.
+- `--memory_nodes /path/to/config/file`. CN needs to know which MNs can be contacted and their information.
+- `--threads, -T integer`.
+- `--size, -s integer`. How many key-value pairs are populated.
+- `--workload, -w A/B/C/L/R`. YCSB workloads. L and R are for load only and range only.
+
 
 ## Configuration
-We have configuration file examples in the directory `./config_files`. 
+We have configuration file examples in the directory `./config_files`.
 ### Compute node configuration file
-Format of a  compute node configuration file is as follows: 
+Format of a  compute node configuration file is as follows:
 ```C++
 //        tcp            roce         erpc
 node0: 1.1.1.1:123, 2.2.2.2:123, 3.3.3.3:123
