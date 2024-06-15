@@ -1,10 +1,10 @@
 {
-    "compiler": "clang++",
+    "compiler": "g++",
     "header-suffix": "hpp",
     "source-suffix": "cpp",
     "flags": {
         "compile": {
-            "opt": "-O0",
+            "opt": "-O3",
             "debug": "-g",
             "warning": "-Wall -Wno-unused-function",
             "std": "-std=c++17",
@@ -17,7 +17,6 @@
         },
         "link": {
             "rdma": "-libverbs",
-            "pmem": "-lpmem",
             "thread": "-lpthread",
             "tbb": "-Lthird-party/tbb/lib -Lthird-party/tbb/lib64 -ltbb",
             "eRPC": "-Lthird-party/eRPC/build -lerpc",
